@@ -1,0 +1,6 @@
+node_modules
+.next
+.env
+.DS_Store
+.node_modules_old_2915
+.package-lock_old_2915

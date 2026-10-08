@@ -1,0 +1,354 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── SITE SETTINGS (singleton) ────────────────────────────────────
+
+model SiteSettings {
+  id                  String   @id @default("singleton")
+  lastEnrichmentAt    DateTime @default(now())
+  lastBatchVerifiedAt DateTime @default(now())
+}
+
+// ─── USERS ────────────────────────────────────────────────────────
+
+model User {
+  id             String    @id @default(cuid())
+  username       String    @unique
+  passwordHash   String
+  displayName    String?
+  bio            String?   @db.VarChar(160)
+  subjects       String[]
+  dailyXpGoal    Int       @default(50)
+  totalXP        Int       @default(0)
+  streak         Int       @default(0)
+  longestStreak  Int       @default(0)
+  freezeTokens   Int       @default(0)
+  lastStudiedAt  DateTime?
+  isPublic       Boolean   @default(true)
+  onboardingDone Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  studySessions       StudySession[]
+  memberships         GroupMember[]
+  messages            Message[]
+  messageReactions    MessageReaction[]
+  savedQuotes         SavedQuote[]
+  badges              UserBadge[]
+  notifications       Notification[]
+  challengeToken      ChallengeToken?
+  challengesMade      ScoreChallenge[]       @relation("challenger")
+  sessionAccessGrants SessionAccessRequest[] @relation("owner")
+  sessionAccessReqs   SessionAccessRequest[] @relation("requester")
+  weeklyReports       WeeklyReport[]
+  
+  watching Watcher[] @relation("watching")
+  watchers Watcher[] @relation("watchers")
+
+  @@index([totalXP])
+  @@index([streak])
+}
+
+model Watcher {
+  id          String   @id @default(cuid())
+  watcherId   String
+  targetId    String
+  createdAt   DateTime @default(now())
+
+  watcher User @relation("watching", fields: [watcherId], references: [id], onDelete: Cascade)
+  target  User @relation("watchers", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([watcherId, targetId])
+}
+
+// ─── STUDY SESSIONS ──────────────────────────────────────────────
+
+model StudySession {
+  id                String   @id @default(cuid())
+  userId            String
+  title             String?
+  rawText           String
+  xpAwarded         Int
+  rawXp             Int
+  historicalAvg     Float?
+  aiBreakdown       String
+  aiSuggestion      String
+  closestBaseline   Int
+  confidence        Float
+  tags              String[]
+  isShared          Boolean  @default(false)
+  validationRetries Int      @default(0)
+  createdAt         DateTime @default(now())
+
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessRequests SessionAccessRequest[]
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+model SessionAccessRequest {
+  id          String        @id @default(cuid())
+  sessionId   String
+  ownerId     String
+  requesterId String
+  status      RequestStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+
+  session   StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  owner     User         @relation("owner", fields: [ownerId], references: [id])
+  requester User         @relation("requester", fields: [requesterId], references: [id])
+
+  @@unique([sessionId, requesterId])
+}
+
+// ─── CHALLENGE SYSTEM ─────────────────────────────────────────────
+
+model ChallengeToken {
+  id              String @id @default(cuid())
+  userId          String @unique
+  tokensRemaining Int    @default(10)
+  resetDate       String // YYYY-MM-DD, lazily checked on login
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ScoreChallenge {
+  id            String          @id @default(cuid())
+  challengerId  String
+  targetUserId  String
+  groupId       String
+  challengeDate String // YYYY-MM-DD
+  originalDayXp Int
+  newDayXp      Int?
+  sessionsCount Int
+  result        ChallengeResult @default(PENDING)
+  createdAt     DateTime        @default(now())
+
+  challenger User @relation("challenger", fields: [challengerId], references: [id])
+
+  @@index([targetUserId, challengeDate])
+}
+
+enum ChallengeResult {
+  PENDING
+  SCORE_CHANGED
+  SCORE_CONFIRMED
+}
+
+// ─── BASELINE ────────────────────────────────────────────────────
+
+model BaselineTask {
+  id          Int    @id // 1–15
+  description String
+  xpAnchor    Int
+  examContext String
+}
+
+// ─── INSPIRATION QUOTES ──────────────────────────────────────────
+
+model InspirationQuote {
+  id              String   @id @default(cuid())
+  type            String
+  category        String
+  quote           String
+  author          String?
+  whyItMatters    String
+  source          String   @default("curated")
+  qualityVerified Boolean  @default(false)
+  timesShown      Int      @default(0)
+  dailyDate       String?  @unique
+  createdAt       DateTime @default(now())
+
+  savedBy SavedQuote[]
+
+  @@index([type, qualityVerified])
+  @@index([dailyDate])
+}
+
+model SavedQuote {
+  id      String   @id @default(cuid())
+  userId  String
+  quoteId String
+  savedAt DateTime @default(now())
+
+  user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quote InspirationQuote @relation(fields: [quoteId], references: [id])
+
+  @@unique([userId, quoteId])
+}
+
+// ─── GROUPS ──────────────────────────────────────────────────────
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String   @db.VarChar(50)
+  description String?  @db.VarChar(300)
+  inviteCode  String   @unique
+  isPrivate   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  members       GroupMember[]
+  messages      Message[]
+  announcements Announcement[]
+  joinRequests  JoinRequest[]
+}
+
+model GroupMember {
+  id       String   @id @default(cuid())
+  userId   String
+  groupId  String
+  role     Role     @default(MEMBER)
+  isMuted  Boolean  @default(false)
+  joinedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([groupId])
+}
+
+enum Role {
+  MEMBER
+  ADMIN
+  SUPER_ADMIN
+}
+
+model JoinRequest {
+  id        String        @id @default(cuid())
+  userId    String
+  groupId   String
+  status    RequestStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── CHAT ────────────────────────────────────────────────────────
+
+model Message {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  content   String   @db.VarChar(1000)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  group     Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reactions MessageReaction[]
+
+  @@index([groupId, expiresAt])
+  @@index([expiresAt])
+}
+
+model MessageReaction {
+  id        String @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  groupId   String
+  authorId  String
+  content   String   @db.VarChar(2000)
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+// ─── WEEKLY REPORTS ───────────────────────────────────────────────
+
+model WeeklyReport {
+  id        String   @id @default(cuid())
+  userId    String
+  weekStart String // YYYY-MM-DD (Monday)
+  content   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStart])
+}
+
+// ─── GAMIFICATION ─────────────────────────────────────────────────
+
+model Badge {
+  id          String @id @default(cuid())
+  slug        String @unique
+  name        String
+  description String
+  icon        String
+  condition   String
+
+  users UserBadge[]
+}
+
+model UserBadge {
+  id       String   @id @default(cuid())
+  userId   String
+  badgeId  String
+  earnedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id])
+
+  @@unique([userId, badgeId])
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  message   String
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
+
+// ─── API KEY MANAGEMENT ──────────────────────────────────────────
+
+model ApiKey {
+  id             String    @id @default(cuid())
+  encryptedKey   String
+  label          String?
+  status         KeyStatus @default(ACTIVE)
+  exhaustedUntil DateTime?
+  lastUsed       DateTime?
+  totalCalls     Int       @default(0)
+  totalErrors    Int       @default(0)
+}
+
+enum KeyStatus {
+  ACTIVE
+  EXHAUSTED
+}
