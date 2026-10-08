@@ -104,7 +104,7 @@ Respond ONLY with a JSON object:
         originalDayXp: originalXp,
         newDayXp: data.newXp,
         sessionsCount: todaySessions.length,
-        result: finalDeducted > 0 ? 'APPROVED' : (finalDeducted < 0 ? 'REJECTED' : 'REJECTED')
+        result: finalDeducted !== 0 ? 'SCORE_CHANGED' : 'SCORE_CONFIRMED'
       }
     });
 
