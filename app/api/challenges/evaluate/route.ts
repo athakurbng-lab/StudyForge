@@ -3,12 +3,7 @@ import prisma from '@/app/lib/prisma';
 import { verifyAuthToken } from '@/app/lib/auth';
 import { cookies } from 'next/headers';
 
-const geminiKeys = [
-  process.env.GEMINI_API_KEY_1,
-  process.env.GEMINI_API_KEY_2,
-  process.env.GEMINI_API_KEY_3,
-  process.env.GEMINI_API_KEY_4
-].filter(Boolean) as string[];
+const geminiKeys = process.env.GEMINI_KEYS?.split(',') || [];
 
 let currentKeyIndex = 0;
 
