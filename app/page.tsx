@@ -1,9 +1,32 @@
 import Link from 'next/link';
 import { Anvil } from 'lucide-react';
+import { cookies } from 'next/headers';
+import { verifyAuthToken } from '@/app/lib/auth';
+import prisma from '@/app/lib/prisma';
+import { redirect } from 'next/navigation';
 
-export default function Home() {
+export default async function Home() {
+  const token = cookies().get('token')?.value;
+
+  if (token) {
+    const payload = await verifyAuthToken(token);
+    if (payload && payload.userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: payload.userId as string },
+        select: { id: true, onboardingDone: true }
+      });
+      if (user) {
+        if (user.onboardingDone) {
+          redirect('/dashboard');
+        } else {
+          redirect('/onboarding');
+        }
+      }
+    }
+  }
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24 bg-[#0a0a0f] relative overflow-hidden">
+    <main className="flex min-h-screen flex-col items-center justify-center p-6 sm:p-24 bg-[#0a0a0f] relative overflow-hidden">
       {/* Particle field placeholder */}
       <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#12121a] via-[#0a0a0f] to-[#0a0a0f]" />
       

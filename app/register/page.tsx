@@ -28,7 +28,7 @@ export default function RegisterPage() {
       if (!res.ok) throw new Error(data.error);
 
       // Successfully registered and logged in
-      router.push("/onboarding");
+      window.location.href = "/onboarding";
     } catch (err: any) {
       setError(err.message || "An error occurred");
     } finally {

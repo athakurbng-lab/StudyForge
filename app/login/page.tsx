@@ -27,9 +27,9 @@ export default function LoginPage() {
       if (!res.ok) throw new Error(data.error);
 
       if (data.user.onboardingDone) {
-        router.push("/dashboard");
+        window.location.href = "/dashboard";
       } else {
-        router.push("/onboarding");
+        window.location.href = "/onboarding";
       }
     } catch (err: any) {
       setError(err.message || "An error occurred");
