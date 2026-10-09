@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       : "No previous sessions today.";
 
     // Call Gemini API with Key Cycling
-    const geminiKeys = process.env.GEMINI_KEYS?.split(',') || [];
+    const geminiKeys = process.env.GEMINI_KEYS?.split(',').map(k => k.trim()).filter(Boolean) || [];
     if (geminiKeys.length === 0) {
       return NextResponse.json({ error: 'Gemini API key not configured' }, { status: 500 });
     }

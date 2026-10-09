@@ -3,7 +3,7 @@ import prisma from '@/app/lib/prisma';
 import { verifyAuthToken } from '@/app/lib/auth';
 import { cookies } from 'next/headers';
 
-const geminiKeys = process.env.GEMINI_KEYS?.split(',') || [];
+const geminiKeys = process.env.GEMINI_KEYS?.split(',').map(k => k.trim()).filter(Boolean) || [];
 
 let currentKeyIndex = 0;
 
