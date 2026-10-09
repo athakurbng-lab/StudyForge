@@ -17,13 +17,50 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { targetUserId, groupId } = body;
 
+    if (!targetUserId || !groupId) {
+      return NextResponse.json({ error: 'Missing targetUserId or groupId' }, { status: 400 });
+    }
+
+    if (targetUserId === payload.userId) {
+      return NextResponse.json({ error: 'You cannot challenge yourself' }, { status: 400 });
+    }
+
     const todayStr = new Date().toISOString().split('T')[0];
+
+    // Check & consume challenge tokens (10 per day)
+    let tokenRecord = await prisma.challengeToken.findUnique({
+      where: { userId: payload.userId as string }
+    });
+
+    if (!tokenRecord) {
+      tokenRecord = await prisma.challengeToken.create({
+        data: {
+          userId: payload.userId as string,
+          tokensRemaining: 10,
+          resetDate: todayStr
+        }
+      });
+    } else if (tokenRecord.resetDate !== todayStr) {
+      tokenRecord = await prisma.challengeToken.update({
+        where: { id: tokenRecord.id },
+        data: { tokensRemaining: 10, resetDate: todayStr }
+      });
+    }
+
+    if (tokenRecord.tokensRemaining <= 0) {
+      return NextResponse.json({ error: 'Out of challenge tokens for today (Daily limit reached)' }, { status: 400 });
+    }
+
+    await prisma.challengeToken.update({
+      where: { id: tokenRecord.id },
+      data: { tokensRemaining: { decrement: 1 } }
+    });
     
     // Check if challenge already exists
     const existing = await prisma.scoreChallenge.findFirst({
       where: { targetUserId, challengeDate: todayStr, challengerId: payload.userId as string }
     });
-    if (existing) return NextResponse.json({ error: 'Already challenged today' }, { status: 400 });
+    if (existing) return NextResponse.json({ error: 'Already challenged this user today' }, { status: 400 });
 
     // Fetch target user's sessions for today
     const today = new Date();
@@ -113,6 +150,20 @@ Respond ONLY with a JSON object:
         where: { id: targetUserId },
         data: { totalXP: { decrement: finalDeducted } } // decrementing a negative adds XP
       });
+
+      // Also adjust the target user's latest today session so the Daily Group Leaderboard reflects the outcome!
+      const targetSession = todaySessions[todaySessions.length - 1];
+      if (targetSession) {
+        const adjustedXp = Math.max(0, targetSession.xpAwarded - finalDeducted);
+        await prisma.studySession.update({
+          where: { id: targetSession.id },
+          data: {
+            xpAwarded: adjustedXp,
+            aiBreakdown: targetSession.aiBreakdown + `\n\n[CHALLENGE RESULT: ${finalDeducted > 0 ? `Reduced by ${finalDeducted} XP` : `Increased by ${-finalDeducted} XP`} by peer challenge audit]`
+          }
+        });
+      }
+
       if (finalDeducted > 0) {
         return NextResponse.json({ message: `Challenge Won! ⚔️ (AI Deducted ${finalDeducted} XP)`, deducted: finalDeducted });
       } else {

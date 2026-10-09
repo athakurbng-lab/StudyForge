@@ -1,20 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 type Message = {
   id: string;
+  userId: string;
   content: string;
   createdAt: Date;
   user: { username: string; displayName: string | null };
 };
 
 export function GroupChat({ groupId, initialMessages, currentUserId, currentUserRole }: { groupId: string, initialMessages: Message[], currentUserId: string, currentUserRole?: string }) {
-  const [messages, setMessages] = useState(initialMessages);
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  // Polling for live chat updates every 4 seconds
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/groups/${groupId}/chat`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.messages) {
+            setMessages(data.messages);
+          }
+        }
+      } catch (err) {
+        // Silently catch polling errors
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [groupId]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,11 +71,17 @@ export function GroupChat({ groupId, initialMessages, currentUserId, currentUser
 
   return (
     <div className="bg-black/20 border border-white/5 rounded-2xl p-6 flex flex-col h-[500px]">
-      <h3 className="text-lg font-syne font-bold mb-4">Live Chat (24h)</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-syne font-bold">Live Chat (24h)</h3>
+        <span className="flex items-center gap-1.5 text-[11px] text-emerald-400">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          Live Sync
+        </span>
+      </div>
       
       <div className="flex-1 overflow-y-auto space-y-4 mb-4 flex flex-col-reverse pr-2">
         {messages.map(msg => {
-          const isMe = msg.user.username === currentUserId || msg.user.displayName === currentUserId; // simplified check
+          const isMe = msg.userId === currentUserId;
           const canDelete = isMe || currentUserRole === 'ADMIN' || currentUserRole === 'SUPER_ADMIN';
           return (
             <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group`}>

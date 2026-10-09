@@ -29,6 +29,34 @@ export default async function DashboardPage() {
     }
   });
 
+  // Lazy streak check on dashboard load
+  if (user && user.streak > 0 && user.lastStudiedAt) {
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+
+    const lastMidnight = new Date(user.lastStudiedAt);
+    lastMidnight.setHours(0, 0, 0, 0);
+
+    const diffDays = Math.round((todayMidnight.getTime() - lastMidnight.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 1) {
+      const missedDays = diffDays - 1;
+      if (user.freezeTokens >= missedDays) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { freezeTokens: { decrement: missedDays } }
+        });
+        user.freezeTokens -= missedDays;
+      } else {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { streak: 0 }
+        });
+        user.streak = 0;
+      }
+    }
+  }
+
   const recentSessions = user!.studySessions.slice(0, 5);
 
   const todayStr = new Date().toISOString().split('T')[0];

@@ -3,6 +3,37 @@ import prisma from '@/app/lib/prisma';
 import { verifyAuthToken } from '@/app/lib/auth';
 import { cookies } from 'next/headers';
 
+export async function GET(request: Request, { params }: { params: { id: string } }) {
+  try {
+    const token = cookies().get('token')?.value;
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    
+    const payload = await verifyAuthToken(token);
+    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const membership = await prisma.groupMember.findFirst({
+      where: { groupId: params.id, userId: payload.userId as string }
+    });
+    if (!membership) {
+      return NextResponse.json({ error: 'Forbidden: Not a member' }, { status: 403 });
+    }
+
+    const messages = await prisma.message.findMany({
+      where: { groupId: params.id, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        user: { select: { username: true, displayName: true } }
+      }
+    });
+
+    return NextResponse.json({ messages });
+  } catch (error) {
+    console.error('Chat fetch error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
     const token = cookies().get('token')?.value;
@@ -10,6 +41,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
     
     const payload = await verifyAuthToken(token);
     if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const membership = await prisma.groupMember.findFirst({
+      where: { groupId: params.id, userId: payload.userId as string }
+    });
+    if (!membership) {
+      return NextResponse.json({ error: 'Forbidden: Not a member' }, { status: 403 });
+    }
 
     const { content } = await request.json();
 
