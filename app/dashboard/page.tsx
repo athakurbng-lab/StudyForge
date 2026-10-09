@@ -1,6 +1,7 @@
 import prisma from '@/app/lib/prisma';
 import { cookies } from 'next/headers';
 import { verifyAuthToken } from '@/app/lib/auth';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { DashboardChart } from './DashboardChart';
 
@@ -32,7 +33,11 @@ export default async function DashboardPage() {
     }
   });
 
-  const recentSessions = user!.studySessions.slice(0, 5);
+  if (!user) {
+    redirect('/login');
+  }
+
+  const recentSessions = user.studySessions.slice(0, 5);
 
   const todayStr = new Date().toISOString().split('T')[0];
   const quote = await prisma.inspirationQuote.findUnique({

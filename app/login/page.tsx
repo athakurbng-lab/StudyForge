@@ -40,11 +40,7 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 p-8 rounded-2xl shadow-2xl"
-      >
+      <div className="w-full max-w-md bg-[#12121c] border border-white/10 p-8 rounded-2xl shadow-2xl">
         <h2 className="text-3xl font-syne font-bold text-center mb-8">Welcome Back</h2>
         
         {error && <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 text-red-200 rounded-lg text-sm">{error}</div>}
@@ -83,7 +79,7 @@ export default function LoginPage() {
         <p className="text-center mt-6 text-sm text-slate-400">
           Don't have an account? <Link href="/register" className="text-indigo-400 hover:text-indigo-300">Register</Link>
         </p>
-      </motion.div>
+      </div>
     </main>
   );
 }
