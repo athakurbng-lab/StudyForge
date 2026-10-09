@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/app/lib/prisma';
 import { verifyAuthToken } from '@/app/lib/auth';
 import { cookies } from 'next/headers';
+import { processSessionStreakAndBadges } from '@/app/lib/streak';
 
 export async function POST(request: Request) {
   try {
@@ -146,49 +147,8 @@ ${pastContext}`;
       }
     });
 
-    const user = await prisma.user.findUnique({ where: { id: payload.userId as string } });
-    
-    if (user) {
-      let newStreak = user.streak;
-      let longestStreak = user.longestStreak;
-      let tokensUsed = 0;
-
-      if (user.lastStudiedAt) {
-        const last = new Date(user.lastStudiedAt);
-        last.setHours(0,0,0,0);
-        const todayStr = new Date();
-        todayStr.setHours(0,0,0,0);
-        const diff = Math.floor((todayStr.getTime() - last.getTime()) / (1000 * 60 * 60 * 24));
-        
-        if (diff === 1) {
-          newStreak++;
-          longestStreak = Math.max(longestStreak, newStreak);
-        } else if (diff > 1) {
-          if (user.freezeTokens > 0 && diff <= user.freezeTokens + 1) {
-            tokensUsed = diff - 1;
-            newStreak++;
-          } else {
-            newStreak = 1;
-          }
-        }
-      } else {
-        newStreak = 1;
-        longestStreak = 1;
-      }
-
-      const netXpChange = finalXp - totalXpDeducted;
-
-      await prisma.user.update({
-        where: { id: payload.userId as string },
-        data: {
-          totalXP: Math.max(0, user.totalXP + netXpChange),
-          lastStudiedAt: new Date(),
-          streak: newStreak,
-          longestStreak,
-          freezeTokens: { decrement: tokensUsed }
-        }
-      });
-    }
+    const netXpChange = finalXp - totalXpDeducted;
+    await processSessionStreakAndBadges(payload.userId as string, netXpChange);
 
     return NextResponse.json({ success: true, session });
   } catch (error) {

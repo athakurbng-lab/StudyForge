@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Anvil } from 'lucide-react';
 
 import { Navigation } from './Navigation';
+import { evaluateLazyStreak } from '@/app/lib/streak';
 
 export default async function DashboardLayout({
   children,
@@ -22,6 +23,8 @@ export default async function DashboardLayout({
   if (!payload || !payload.userId) {
     redirect('/login');
   }
+
+  await evaluateLazyStreak(payload.userId as string);
 
   const user = await prisma.user.findUnique({
     where: { id: payload.userId as string },

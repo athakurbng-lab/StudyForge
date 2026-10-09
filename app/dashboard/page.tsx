@@ -25,37 +25,12 @@ export default async function DashboardPage() {
           requester: { select: { username: true, displayName: true } },
           session: { select: { title: true } }
         }
+      },
+      badges: {
+        include: { badge: true }
       }
     }
   });
-
-  // Lazy streak check on dashboard load
-  if (user && user.streak > 0 && user.lastStudiedAt) {
-    const todayMidnight = new Date();
-    todayMidnight.setHours(0, 0, 0, 0);
-
-    const lastMidnight = new Date(user.lastStudiedAt);
-    lastMidnight.setHours(0, 0, 0, 0);
-
-    const diffDays = Math.round((todayMidnight.getTime() - lastMidnight.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (diffDays > 1) {
-      const missedDays = diffDays - 1;
-      if (user.freezeTokens >= missedDays) {
-        await prisma.user.update({
-          where: { id: userId },
-          data: { freezeTokens: { decrement: missedDays } }
-        });
-        user.freezeTokens -= missedDays;
-      } else {
-        await prisma.user.update({
-          where: { id: userId },
-          data: { streak: 0 }
-        });
-        user.streak = 0;
-      }
-    }
-  }
 
   const recentSessions = user!.studySessions.slice(0, 5);
 
@@ -91,6 +66,56 @@ export default async function DashboardPage() {
           </div>
         </div>
       </section>
+
+      {/* Streak & Gamification Stats Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-3">
+          <span className="text-3xl">🔥</span>
+          <div>
+            <div className="text-xl font-bold font-syne text-amber-400">{user!.streak} Days</div>
+            <div className="text-xs text-slate-400">Current Streak</div>
+          </div>
+        </div>
+
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-3">
+          <span className="text-3xl">🏆</span>
+          <div>
+            <div className="text-xl font-bold font-syne text-indigo-400">{user!.longestStreak} Days</div>
+            <div className="text-xs text-slate-400">Longest Streak</div>
+          </div>
+        </div>
+
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-3">
+          <span className="text-3xl">❄️</span>
+          <div>
+            <div className="text-xl font-bold font-syne text-cyan-400">{user!.freezeTokens}</div>
+            <div className="text-xs text-slate-400">Freeze Tokens</div>
+          </div>
+        </div>
+
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-3">
+          <span className="text-3xl">⚡</span>
+          <div>
+            <div className="text-xl font-bold font-syne text-purple-400">{user!.totalXP} XP</div>
+            <div className="text-xs text-slate-400">All-Time Total</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Badges strip (if any earned) */}
+      {user!.badges.length > 0 && (
+        <section className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-4 overflow-x-auto">
+          <span className="text-xs font-semibold uppercase text-slate-400 tracking-wider whitespace-nowrap">Unlocked Badges:</span>
+          <div className="flex items-center gap-3">
+            {user!.badges.map((ub: any) => (
+              <div key={ub.id} className="flex items-center gap-1.5 bg-black/30 border border-white/10 px-3 py-1 rounded-full text-xs" title={ub.badge.description}>
+                <span>{ub.badge.icon}</span>
+                <span className="font-semibold text-slate-200">{ub.badge.name}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Daily Inspiration */}
       <section className="bg-indigo-900/20 border border-indigo-500/30 rounded-2xl p-6 relative overflow-hidden">
