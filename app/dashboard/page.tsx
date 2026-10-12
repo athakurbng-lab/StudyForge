@@ -58,16 +58,26 @@ export default async function DashboardPage() {
           <p className="text-slate-400 text-sm">Keep up the great work. You're doing amazing.</p>
         </div>
         
-        <div className="w-full md:w-1/3 bg-black/20 rounded-xl p-4 border border-white/5">
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-slate-300">Daily Goal</span>
-            <span className="font-bold text-indigo-400">{todayXp} / {user!.dailyXpGoal} XP</span>
-          </div>
-          <div className="w-full bg-slate-800 rounded-full h-3">
-            <div 
-              className="bg-gradient-to-r from-indigo-500 to-cyan-400 h-3 rounded-full transition-all duration-1000"
-              style={{ width: `${progress}%` }}
-            ></div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
+          <Link
+            href="/sessions"
+            className="px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white font-bold text-sm shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 active:translate-y-0 whitespace-nowrap"
+          >
+            <span className="text-base">⚡</span>
+            <span>+ Log Study Session</span>
+          </Link>
+
+          <div className="w-full sm:w-64 bg-black/20 rounded-xl p-4 border border-white/5">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-slate-300">Daily Goal</span>
+              <span className="font-bold text-indigo-400">{todayXp} / {user!.dailyXpGoal} XP</span>
+            </div>
+            <div className="w-full bg-slate-800 rounded-full h-3">
+              <div 
+                className="bg-gradient-to-r from-indigo-500 to-cyan-400 h-3 rounded-full transition-all duration-1000"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
           </div>
         </div>
       </section>

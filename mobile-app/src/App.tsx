@@ -15,6 +15,7 @@ import { AnalyticsView } from './components/AnalyticsView';
 import { SettingsView } from './components/SettingsView';
 import { GroupsView } from './components/GroupsView';
 import { AuthModal } from './components/AuthModal';
+import { LogSessionModal } from './components/LogSessionModal';
 import { BottomNav, NavTab } from './components/BottomNav';
 import { ApiService, AuthUser } from './services/apiService';
 
@@ -31,6 +32,7 @@ export const App: React.FC = () => {
   const [settings, setSettings] = useState<UserSettings>(StorageService.getSettings());
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(StorageService.getAuthUser());
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
+  const [isLogSessionOpen, setIsLogSessionOpen] = useState<boolean>(false);
 
   // Date Navigation State - defaulted dynamically to today
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
@@ -165,6 +167,7 @@ export const App: React.FC = () => {
         totalXp={totalXp}
         currentUser={currentUser}
         onOpenAuth={() => setIsAuthOpen(true)}
+        onOpenLogSession={() => setIsLogSessionOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -189,7 +192,7 @@ export const App: React.FC = () => {
               onAddModule={handleAddModule}
               onDeleteModule={handleDeleteModule}
               onQuickLogSession={(_mod) => {
-                setActiveTab('syllabus');
+                setIsLogSessionOpen(true);
               }}
             />
 
@@ -197,6 +200,7 @@ export const App: React.FC = () => {
             <SessionTimeline
               sessions={sessions}
               showNotesOnly={showNotesOnly}
+              onOpenLogSession={() => setIsLogSessionOpen(true)}
             />
           </div>
         )}
@@ -228,6 +232,7 @@ export const App: React.FC = () => {
         {activeTab === 'analytics' && (
           <AnalyticsView
             sessions={sessions}
+            onOpenLogSession={() => setIsLogSessionOpen(true)}
           />
         )}
 
@@ -260,6 +265,15 @@ export const App: React.FC = () => {
         onClose={() => setIsAuthOpen(false)}
         currentUser={currentUser}
         onUserChanged={handleUserChanged}
+      />
+
+      {/* Log Study Session Modal (AI Evaluation & Cloud Sync) */}
+      <LogSessionModal
+        isOpen={isLogSessionOpen}
+        onClose={() => setIsLogSessionOpen(false)}
+        exam={activeExam}
+        modules={modules}
+        onSessionCompleted={handleSessionCompleted}
       />
     </div>
   );

@@ -13,6 +13,7 @@ interface TopHeaderProps {
   totalXp: number;
   currentUser?: AuthUser | null;
   onOpenAuth?: () => void;
+  onOpenLogSession?: () => void;
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
@@ -25,7 +26,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   freezeTokens,
   totalXp,
   currentUser,
-  onOpenAuth
+  onOpenAuth,
+  onOpenLogSession
 }) => {
   const currentExamConfig = EXAMS_DATA[activeExam];
 
@@ -72,6 +74,18 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             <Award className="w-3.5 h-3.5 text-indigo-500" />
             <span>{totalXp.toLocaleString()}</span>
           </div>
+
+          {/* + Log Session Action Button */}
+          {onOpenLogSession && (
+            <button
+              type="button"
+              onClick={onOpenLogSession}
+              className="px-2 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold shadow-2xs flex items-center gap-1 active:scale-95 transition-all"
+              title="Log Study Session manually"
+            >
+              <span>+ Log</span>
+            </button>
+          )}
 
           {/* Profile / Cloud Sync Button */}
           {onOpenAuth && (

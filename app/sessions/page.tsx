@@ -54,12 +54,12 @@ export default function LogSessionPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] p-4 md:p-8">
-      <Link href="/dashboard" className="text-slate-400 hover:text-white mb-8 inline-block">
+    <div className="space-y-6">
+      <Link href="/dashboard" className="text-slate-400 hover:text-white inline-flex items-center gap-1.5 text-sm">
         ← Back to Dashboard
       </Link>
 
-      <div className="max-w-2xl mx-auto mt-8">
+      <div className="max-w-2xl mx-auto">
         {step === 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white/5 border border-white/10 p-6 md:p-8 rounded-2xl">
             <h1 className="text-2xl font-syne font-bold mb-2">Log Study Session</h1>

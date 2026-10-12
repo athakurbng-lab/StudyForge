@@ -11,7 +11,7 @@ export interface StudySession {
   endTime: string;   // e.g. "11:20 PM"
   durationMinutes: number;
   xpEarned: number;
-  mood: 'focused' | 'neutral' | 'distracted'; // 🤩, 🙂, 😔
+  mood?: 'focused' | 'neutral' | 'distracted'; // 🤩, 🙂, 😔
   notes: string;
   aiFeedback?: string;
   date: string; // YYYY-MM-DD
@@ -51,16 +51,25 @@ const STORAGE_KEYS = {
 const DEFAULT_SESSIONS: StudySession[] = [];
 
 export const StorageService = {
-  // One-time startup sanitizer to ensure 0 mock data
+  // One-time startup sanitizer to ensure 0 mock or pre-filled data
   sanitizeStorage(): void {
-    const SANITIZER_KEY = 'studyforge_clean_v3';
+    const SANITIZER_KEY = 'studyforge_clean_v5';
     if (localStorage.getItem(SANITIZER_KEY) !== 'true') {
       const sessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
       if (sessions) {
         try {
           const list = JSON.parse(sessions);
-          if (Array.isArray(list) && (list.length === 0 || list.some((s: any) => s.id === 'sess-1' || s.id === 'sess-7'))) {
-            localStorage.removeItem(STORAGE_KEYS.SESSIONS);
+          if (Array.isArray(list)) {
+            // Filter out any mock/template sessions from earlier test builds
+            const genuine = list.filter((s: any) => !/^sess-[1-9]$/.test(s.id));
+            if (genuine.length === 0) {
+              localStorage.removeItem(STORAGE_KEYS.SESSIONS);
+              localStorage.setItem(STORAGE_KEYS.TOTAL_XP, '0');
+              localStorage.setItem(STORAGE_KEYS.STREAK, '0');
+              localStorage.setItem(STORAGE_KEYS.FREEZE_TOKENS, '0');
+            } else {
+              localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(genuine));
+            }
           }
         } catch {
           localStorage.removeItem(STORAGE_KEYS.SESSIONS);
@@ -195,11 +204,10 @@ export const StorageService = {
     if (!saved) return [];
     try {
       const list = JSON.parse(saved);
-      if (Array.isArray(list) && list.some(s => s.id === 'sess-1' || s.id === 'sess-7')) {
-        localStorage.removeItem(STORAGE_KEYS.SESSIONS);
-        return [];
+      if (Array.isArray(list)) {
+        return list.filter(s => !/^sess-[1-9]$/.test(s.id));
       }
-      return list;
+      return [];
     } catch {
       return [];
     }

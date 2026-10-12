@@ -28,15 +28,31 @@ export function Navigation({ userXp, userStreak, userName }: { userXp: number, u
               
               {/* Desktop Nav */}
               <div className="hidden md:flex space-x-4">
-                {links.map(link => (
-                  <Link 
-                    key={link.href} 
-                    href={link.href} 
-                    className={`transition-colors flex items-center gap-1.5 ${pathname === link.href ? 'text-indigo-400 font-bold' : 'text-slate-300 hover:text-white'}`}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
+                {links.map(link => {
+                  const Icon = link.icon;
+                  if (link.href === '/sessions') {
+                    return (
+                      <Link 
+                        key={link.href} 
+                        href={link.href} 
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white font-bold text-sm shadow-md shadow-indigo-500/20 transition-all hover:scale-105 active:scale-95"
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span>{link.label}</span>
+                      </Link>
+                    );
+                  }
+                  return (
+                    <Link 
+                      key={link.href} 
+                      href={link.href} 
+                      className={`transition-colors flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${pathname === link.href ? 'text-indigo-400 font-bold bg-white/5' : 'text-slate-300 hover:text-white hover:bg-white/5'}`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{link.label}</span>
+                    </Link>
+                  );
+                })}
               </div>
             </div>
 
@@ -71,6 +87,22 @@ export function Navigation({ userXp, userStreak, userName }: { userXp: number, u
               </div>
               {links.map(link => {
                 const Icon = link.icon;
+                if (link.href === '/sessions') {
+                  return (
+                    <Link 
+                      key={link.href} 
+                      href={link.href}
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-500/20 to-cyan-500/20 border border-indigo-500/40 text-indigo-300 font-bold shadow-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className="w-5 h-5 text-indigo-400" />
+                        <span>{link.label}</span>
+                      </div>
+                      <span className="text-xs bg-indigo-500 text-white px-2 py-0.5 rounded-full font-bold">+ New</span>
+                    </Link>
+                  );
+                }
                 return (
                   <Link 
                     key={link.href} 
