@@ -137,6 +137,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       <div className="space-y-3">
         {loading ? (
           <div className="text-center py-8 text-xs text-slate-400">Loading active study groups...</div>
+        ) : groups.length === 0 ? (
+          <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-2">
+            <Users className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-1" />
+            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">No Study Groups Joined Yet</h4>
+            <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
+              Create your own study squad or enter an invite code above to collaborate with peers.
+            </p>
+          </div>
         ) : (
           groups.map((group) => {
             const isSelected = selectedGroup?.id === group.id;

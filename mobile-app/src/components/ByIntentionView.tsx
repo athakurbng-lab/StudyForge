@@ -56,8 +56,8 @@ export const ByIntentionView: React.FC<ByIntentionViewProps> = ({
       category: newCategory.trim() || 'Custom',
       color: newColor,
       topics: [
-        { id: `${id}_t1`, name: 'Topic 1: Fundamental Concepts', status: 'not_started', confidence: 3 },
-        { id: `${id}_t2`, name: 'Topic 2: Advanced Analysis & PYQs', status: 'not_started', confidence: 2 },
+        { id: `${id}_t1`, name: 'Topic 1: Fundamental Concepts', status: 'not_started', confidence: 1, pyqCount: 0 },
+        { id: `${id}_t2`, name: 'Topic 2: Advanced Analysis & PYQs', status: 'not_started', confidence: 1, pyqCount: 0 },
       ]
     };
 

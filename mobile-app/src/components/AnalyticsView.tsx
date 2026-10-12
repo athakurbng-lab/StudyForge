@@ -7,13 +7,22 @@ interface AnalyticsViewProps {
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions }) => {
-  // Aggregate stats
+  // Aggregate stats dynamically from logged sessions
   const totalMinutes = sessions.reduce((acc, s) => acc + s.durationMinutes, 0);
   const totalHours = Math.floor(totalMinutes / 60);
   const remainingMinutes = totalMinutes % 60;
 
-  const totalBreakMinutes = Math.max(15, Math.round(totalMinutes * 0.04)); // ~25 min
-  const focusBreakRatio = totalBreakMinutes > 0 ? (totalMinutes / totalBreakMinutes).toFixed(1) : '∞';
+  // Real distinct active days
+  const distinctDates = Array.from(new Set(sessions.map(s => s.date)));
+  const activeDaysCount = distinctDates.length;
+
+  const avgMinutesPerDay = activeDaysCount > 0 ? Math.round(totalMinutes / activeDaysCount) : 0;
+  const avgHours = Math.floor(avgMinutesPerDay / 60);
+  const avgRemMinutes = avgMinutesPerDay % 60;
+
+  // Estimated micro-breaks (5m per 25m pomodoro / ~15% focus ratio)
+  const totalBreakMinutes = sessions.length > 0 ? Math.round(totalMinutes * 0.15) : 0;
+  const focusBreakRatio = totalBreakMinutes > 0 ? (totalMinutes / totalBreakMinutes).toFixed(1) : (totalMinutes > 0 ? '∞' : '0');
 
   const moodCounts = {
     focused: sessions.filter(s => s.mood === 'focused').length,
@@ -21,7 +30,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions }) => {
     distracted: sessions.filter(s => s.mood === 'distracted').length,
   };
 
-  const totalMoods = sessions.length || 1;
+  const totalMoods = sessions.length;
 
   return (
     <div className="p-4 space-y-4 bg-slate-50 dark:bg-slate-950 min-h-[calc(100vh-140px)] transition-colors">
@@ -34,13 +43,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions }) => {
             Deep focus metrics, mood telemetry & pacing ratios
           </p>
         </div>
-        <div className="flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
-          <TrendingUp className="w-3.5 h-3.5" />
-          <span>+36% vs last week</span>
+        <div className="flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700">
+          <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />
+          <span>{sessions.length} {sessions.length === 1 ? 'session' : 'sessions'} logged</span>
         </div>
       </div>
 
-      {/* Focus Metrics 4-Card Grid matching Screenshot 3 */}
+      {/* Focus Metrics 4-Card Grid */}
       <div className="grid grid-cols-2 gap-3">
         {/* Total Focus Card */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-3.5 rounded-2xl shadow-2xs">
@@ -49,10 +58,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions }) => {
             <Clock className="w-4 h-4 text-rose-500" />
           </div>
           <div className="text-xl font-black text-slate-900 dark:text-slate-50">
-            {totalHours}h {remainingMinutes}min
+            {totalHours}h {remainingMinutes.toString().padStart(2, '0')}m
           </div>
-          <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1">
-            ↑ 3.2h higher than daily target
+          <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1">
+            {sessions.length === 0 ? 'Start a sprint to log focus' : `${sessions.length} recorded sessions`}
           </div>
         </div>
 
@@ -63,10 +72,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions }) => {
             <BarChart2 className="w-4 h-4 text-indigo-500" />
           </div>
           <div className="text-xl font-black text-slate-900 dark:text-slate-50">
-            8h 12min
+            {avgHours}h {avgRemMinutes.toString().padStart(2, '0')}m
           </div>
           <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1">
-            Consistent 7-day average
+            {activeDaysCount === 0 ? 'No active days yet' : `Across ${activeDaysCount} active ${activeDaysCount === 1 ? 'day' : 'days'}`}
           </div>
         </div>
 
@@ -80,7 +89,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions }) => {
             {totalBreakMinutes}min
           </div>
           <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1">
-            Optimal micro-recovery
+            {totalBreakMinutes === 0 ? 'No breaks logged' : 'Calculated interval recovery'}
           </div>
         </div>
 
@@ -94,12 +103,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions }) => {
             {focusBreakRatio} : 1
           </div>
           <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold mt-1">
-            Elite academic flow state
+            {totalMinutes === 0 ? 'Awaiting first session' : 'Dynamic focus ratio'}
           </div>
         </div>
       </div>
 
-      {/* Focus Quality / Mood Telemetry matching Screenshot 3 */}
+      {/* Focus Quality / Mood Telemetry */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs">
         <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider mb-3">
           Focus Quality & Mood Ratings
@@ -113,7 +122,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions }) => {
               {moodCounts.focused}
             </div>
             <div className="text-[10px] text-slate-400">
-              {Math.round((moodCounts.focused / totalMoods) * 100)}%
+              {totalMoods > 0 ? Math.round((moodCounts.focused / totalMoods) * 100) : 0}%
             </div>
           </div>
 
@@ -124,7 +133,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions }) => {
               {moodCounts.neutral}
             </div>
             <div className="text-[10px] text-slate-400">
-              {Math.round((moodCounts.neutral / totalMoods) * 100)}%
+              {totalMoods > 0 ? Math.round((moodCounts.neutral / totalMoods) * 100) : 0}%
             </div>
           </div>
 
@@ -135,7 +144,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions }) => {
               {moodCounts.distracted}
             </div>
             <div className="text-[10px] text-slate-400">
-              {Math.round((moodCounts.distracted / totalMoods) * 100)}%
+              {totalMoods > 0 ? Math.round((moodCounts.distracted / totalMoods) * 100) : 0}%
             </div>
           </div>
         </div>
@@ -146,16 +155,19 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions }) => {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300">
             <Sparkles className="w-4 h-4 text-indigo-500" />
-            <span>Continuous 5-Session Learning Curve Active</span>
+            <span>Continuous 5-Session Learning Curve</span>
           </div>
           <span className="text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full">
-            Optimal Buff
+            {sessions.length >= 5 ? 'Active Buff' : `${sessions.length}/5 Sessions`}
           </span>
         </div>
         <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-          Your continuous study on single high-yield modules is actively buffed by the Gemini evaluation engine. No penalty is applied for sustained concentration!
+          {sessions.length >= 5
+            ? 'Your sustained focus on high-yield modules is actively buffed by the Gemini evaluation engine!'
+            : 'Log your study sprints to activate the continuous 5-session learning curve. Sustained concentration on single modules earns escalating XP bonuses!'}
         </p>
       </div>
     </div>
   );
 };
+export default AnalyticsView;

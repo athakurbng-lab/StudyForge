@@ -48,9 +48,9 @@ export const SyllabusMasterView: React.FC<SyllabusMasterViewProps> = ({
       category: newCategory.trim() || 'Custom',
       color: newColor,
       topics: [
-        { id: `${id}_t1`, name: 'Topic 1: Foundations & Definitions', status: 'not_started', confidence: 3 },
-        { id: `${id}_t2`, name: 'Topic 2: Core Analysis & Case Studies', status: 'not_started', confidence: 2 },
-        { id: `${id}_t3`, name: 'Topic 3: PYQs & Answer Mastery', status: 'not_started', confidence: 1 },
+        { id: `${id}_t1`, name: 'Topic 1: Foundations & Definitions', status: 'not_started', confidence: 1, pyqCount: 0 },
+        { id: `${id}_t2`, name: 'Topic 2: Core Analysis & Case Studies', status: 'not_started', confidence: 1, pyqCount: 0 },
+        { id: `${id}_t3`, name: 'Topic 3: PYQs & Answer Mastery', status: 'not_started', confidence: 1, pyqCount: 0 },
       ]
     };
 
@@ -66,8 +66,8 @@ export const SyllabusMasterView: React.FC<SyllabusMasterViewProps> = ({
       id: `${moduleId}_t_${Date.now()}`,
       name: newTopicName.trim(),
       status: 'not_started',
-      confidence: 3,
-      pyqCount: 10
+      confidence: 1,
+      pyqCount: 0
     };
     StorageService.addTopicToModule(exam, moduleId, newTopic);
     const targetModule = modules.find(m => m.id === moduleId);

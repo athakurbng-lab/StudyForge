@@ -24,6 +24,7 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
   );
   const [isRunning, setIsRunning] = useState(false);
   const [mode, setMode] = useState<'pomodoro' | 'stopwatch'>('pomodoro');
+  const [pomodoroTargetSeconds, setPomodoroTargetSeconds] = useState(25 * 60);
   const [secondsLeft, setSecondsLeft] = useState(25 * 60); // 25:00
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -96,7 +97,7 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
     setIsEvaluating(true);
 
     const durationMinutes = mode === 'pomodoro'
-      ? Math.max(1, Math.round((25 * 60 - secondsLeft) / 60) || 25)
+      ? Math.max(1, Math.round((pomodoroTargetSeconds - secondsLeft) / 60) || Math.round(pomodoroTargetSeconds / 60))
       : Math.max(1, Math.round(elapsedSeconds / 60));
 
     const now = new Date();
@@ -141,7 +142,7 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
     } catch {}
 
     // Reset timer
-    setSecondsLeft(25 * 60);
+    setSecondsLeft(pomodoroTargetSeconds);
     setElapsedSeconds(0);
     setSessionNotes('');
     setTopicName('');
@@ -150,7 +151,9 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
 
   const handleAdjustTime = (deltaMinutes: number) => {
     if (mode === 'pomodoro') {
-      setSecondsLeft((prev) => Math.max(60, prev + deltaMinutes * 60));
+      const next = Math.max(60, pomodoroTargetSeconds + deltaMinutes * 60);
+      setPomodoroTargetSeconds(next);
+      setSecondsLeft(next);
     }
   };
 

@@ -18,6 +18,8 @@ import { AuthModal } from './components/AuthModal';
 import { BottomNav, NavTab } from './components/BottomNav';
 import { AuthUser } from './services/apiService';
 
+StorageService.sanitizeStorage();
+
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('timer');
   const [activeExam, setActiveExam] = useState<ExamType>(StorageService.getActiveExam());
@@ -30,8 +32,8 @@ export const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(StorageService.getAuthUser());
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
 
-  // Date Navigation State
-  const [selectedDate, setSelectedDate] = useState<string>('2026-10-07');
+  // Date Navigation State - defaulted dynamically to today
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [showNotesOnly, setShowNotesOnly] = useState<boolean>(false);
 
   // Load modules whenever activeExam changes
@@ -116,7 +118,7 @@ export const App: React.FC = () => {
     setSelectedDate(d.toISOString().split('T')[0]);
   };
 
-  const weekStats = StorageService.getWeekStats();
+  const weekStats = StorageService.getWeekStats(selectedDate);
 
   const formattedHeaderDate = () => {
     const d = new Date(selectedDate);

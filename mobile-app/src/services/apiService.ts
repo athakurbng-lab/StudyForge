@@ -92,33 +92,7 @@ export const ApiService = {
       console.warn('Live groups fetch fallback:', err);
     }
 
-    // Default sample active study groups from the CivilsPath / StudyForge network
-    return [
-      {
-        id: 'grp_anthro_2027',
-        name: 'UPSC 2027 Anthropology Optional Super-Batch',
-        description: 'Daily answer writing and case study discussions for Paper 1 & 2.',
-        inviteCode: 'ANTHRO27',
-        memberCount: 84,
-        isPrivate: false
-      },
-      {
-        id: 'grp_med_neet',
-        name: 'NEET PG 2027 Clinical Masters Club',
-        description: 'Pediatrics, Radiology & Pathology high-yield milestone reviews.',
-        inviteCode: 'MEDPG27',
-        memberCount: 62,
-        isPrivate: false
-      },
-      {
-        id: 'grp_bank_quant',
-        name: 'Bank PO & SBI Speed Pacing Circle',
-        description: 'Vedic math shortcuts, DI puzzles, and daily speed drills.',
-        inviteCode: 'BANKPO27',
-        memberCount: 45,
-        isPrivate: false
-      }
-    ];
+    return [];
   },
 
   async joinGroupByCode(code: string): Promise<{ success: boolean; message: string }> {
