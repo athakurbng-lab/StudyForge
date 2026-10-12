@@ -22,6 +22,7 @@ import { FilterModal } from './components/FilterModal';
 import { ApiService, AuthUser } from './services/apiService';
 import { UpdateService, AppReleaseInfo } from './services/updateService';
 import { UpdateModal } from './components/UpdateModal';
+import { ActivityChart } from './components/ActivityChart';
 
 StorageService.sanitizeStorage();
 
@@ -42,6 +43,7 @@ export const App: React.FC = () => {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
   const [aiNotice, setAiNotice] = useState<{ message: string; details: string } | null>(null);
   const [availableUpdate, setAvailableUpdate] = useState<AppReleaseInfo | null>(null);
+  const [showHomeGraph, setShowHomeGraph] = useState<boolean>(false);
 
   // Filter States
   const [selectedModuleFilter, setSelectedModuleFilter] = useState<string | null>(null);
@@ -328,7 +330,16 @@ export const App: React.FC = () => {
               onOpenFilter={() => setIsFilterModalOpen(true)}
               activeFilterCount={activeFilterCount}
               onResetFilter={handleResetFilters}
+              showGraph={showHomeGraph}
+              onToggleShowGraph={() => setShowHomeGraph(!showHomeGraph)}
             />
+
+            {/* Expandable Activity Graph on Home View */}
+            {showHomeGraph && (
+              <div className="p-3 bg-slate-50/70 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 animate-in fade-in duration-200">
+                <ActivityChart sessions={sessions} />
+              </div>
+            )}
 
             {/* By Intention View matching Screenshot 1 */}
             <ByIntentionView

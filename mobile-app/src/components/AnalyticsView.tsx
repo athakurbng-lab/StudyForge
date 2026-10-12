@@ -1,6 +1,7 @@
 import React from 'react';
 import { TrendingUp, Clock, Sparkles, BarChart2, Award, Zap, PlusCircle } from 'lucide-react';
 import { StudySession } from '../services/storageService';
+import { ActivityChart } from './ActivityChart';
 
 interface AnalyticsViewProps {
   sessions: StudySession[];
@@ -95,6 +96,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions, onOpenLo
         </div>
       ) : (
         <>
+          {/* Activity & Focus Graph (Mirrors Website 30-Day Activity Chart) */}
+          <ActivityChart sessions={sessions} />
+
           {/* Focus Metrics 4-Card Grid (100% Genuine Data) */}
           <div className="grid grid-cols-2 gap-3">
             {/* Total Focus Card */}
