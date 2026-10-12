@@ -23,6 +23,34 @@ export interface GroupItem {
   role?: string | null;
 }
 
+export interface GroupMemberItem {
+  id: string;
+  userId: string;
+  role: string;
+  displayName: string;
+  username: string;
+  totalXP: number;
+  streak: number;
+  timeframeXP: number;
+  joinedAt?: string;
+}
+
+export interface GroupDetailItem extends GroupItem {
+  members: GroupMemberItem[];
+  myRole?: string | null;
+}
+
+export interface GroupChatMessage {
+  id: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+  user: {
+    username: string;
+    displayName?: string;
+  };
+}
+
 export const ApiService = {
   // Map site study sessions to mobile format
   mapCloudSessions(rawSessions: any[]): StudySession[] {
@@ -289,6 +317,67 @@ export const ApiService = {
       };
     } catch (err: any) {
       return { success: false, message: err.message || 'Network error joining group' };
+    }
+  },
+
+  async getGroupDetail(groupId: string, timeframe: string = 'all-time'): Promise<GroupDetailItem | null> {
+    try {
+      const token = StorageService.getAuthToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}?timeframe=${timeframe}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.group) {
+          return data.group;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch group detail:', err);
+    }
+    return null;
+  },
+
+  async getGroupChat(groupId: string): Promise<GroupChatMessage[]> {
+    try {
+      const token = StorageService.getAuthToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/chat`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.messages && Array.isArray(data.messages)) {
+          return data.messages;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch group chat:', err);
+    }
+    return [];
+  },
+
+  async sendGroupMessage(groupId: string, content: string): Promise<{ success: boolean; message?: GroupChatMessage; error?: string }> {
+    const token = StorageService.getAuthToken();
+    if (!token) return { success: false, error: 'Sign in required to post messages' };
+
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ content: content.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || 'Failed to send message' };
+      }
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error sending message' };
     }
   }
 };
