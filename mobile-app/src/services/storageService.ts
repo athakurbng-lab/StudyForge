@@ -19,6 +19,7 @@ export interface StudySession {
   category: string;
   apiError?: string;
   usedFallback?: boolean;
+  isShared?: boolean;
 }
 
 export interface DayStats {
@@ -250,6 +251,16 @@ export const StorageService = {
     }
   },
 
+  toggleSessionShare(sessionId: string): StudySession | null {
+    const list = this.getSessions();
+    const target = list.find(s => s.id === sessionId || s.cloudId === sessionId);
+    if (!target) return null;
+
+    target.isShared = !target.isShared;
+    localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(list));
+    return target;
+  },
+
   deleteSession(sessionId: string): { deleted: boolean; xpDeducted: number; cloudId?: string } {
     const list = this.getSessions();
     const target = list.find(s => s.id === sessionId || s.cloudId === sessionId);
@@ -356,8 +367,8 @@ export const StorageService = {
       inactivityAlertTime: '20:30',
       streakSaverEnabled: true,
       spacedRevisionAlertEnabled: true,
-      appVersion: 'v1.0.0 (Release Candidate)',
-      buildNumber: '2026.10.12-Native',
+      appVersion: 'v1.0.3 (Production)',
+      buildNumber: '2026.10.12-v4',
     };
     if (!saved) return defaults;
     try {

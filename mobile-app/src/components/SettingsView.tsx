@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
-import { Key, Bell, Moon, Sun, Monitor, Info, CheckCircle2, AlertTriangle, Sparkles, Send, ShieldAlert, RefreshCw, Target } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Key, Bell, Moon, Sun, Monitor, Info, CheckCircle2, AlertTriangle, Sparkles, Send, ShieldAlert, RefreshCw, Target, Eye, EyeOff, UserPlus, Check, X, Shield, Lock, Globe, Inbox } from 'lucide-react';
 import { UserSettings, StorageService } from '../services/storageService';
 import { GeminiService } from '../services/geminiService';
 import { NotificationService } from '../services/notificationService';
 import { ApiService } from '../services/apiService';
 import { UpdateService, AppReleaseInfo } from '../services/updateService';
 import { UpdateModal } from './UpdateModal';
+import { UserProfileModal } from './UserProfileModal';
 
 interface SettingsViewProps {
   settings: UserSettings;
@@ -29,6 +30,63 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [dailyGoalInput, setDailyGoalInput] = useState<number>(() => StorageService.getDailyXpGoal());
   const [isSavingGoal, setIsSavingGoal] = useState<boolean>(false);
   const [dailyGoalMsg, setDailyGoalMsg] = useState<string | null>(null);
+
+  const [watchersList, setWatchersList] = useState<any[]>([]);
+  const [watchingList, setWatchingList] = useState<any[]>([]);
+  const [accessRequests, setAccessRequests] = useState<any[]>([]);
+  const [newWatcherInput, setNewWatcherInput] = useState<string>('');
+  const [watcherActionMsg, setWatcherActionMsg] = useState<string | null>(null);
+  const [isAddingWatcher, setIsAddingWatcher] = useState<boolean>(false);
+  const [inspectUserId, setInspectUserId] = useState<string | null>(null);
+
+  const currentUser = StorageService.getAuthUser();
+
+  const loadSocialData = async () => {
+    if (!currentUser) return;
+    try {
+      const w = await ApiService.getWatchers();
+      setWatchersList(w.watchers || []);
+      setWatchingList(w.watching || []);
+      const reqs = await ApiService.getAccessRequests();
+      setAccessRequests(reqs || []);
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadSocialData();
+  }, []);
+
+  const handleAddWatcher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWatcherInput.trim()) return;
+    setIsAddingWatcher(true);
+    setWatcherActionMsg(null);
+    const res = await ApiService.addWatcherByUsername(newWatcherInput.trim());
+    if (res.success) {
+      setWatcherActionMsg(`Successfully added @${newWatcherInput.trim()} as Watcher!`);
+      setNewWatcherInput('');
+      loadSocialData();
+    } else {
+      setWatcherActionMsg(res.error || 'Failed to add watcher.');
+    }
+    setIsAddingWatcher(false);
+  };
+
+  const handleRemoveWatcher = async (targetId: string, name: string) => {
+    const success = await ApiService.toggleWatcher(targetId, 'remove');
+    if (success) {
+      setWatcherActionMsg(`Removed watcher access for ${name}.`);
+      loadSocialData();
+    }
+  };
+
+  const handleRespondRequest = async (requestId: string, action: 'APPROVE' | 'REJECT') => {
+    const success = await ApiService.respondToAccessRequest(requestId, action);
+    if (success) {
+      setAccessRequests(prev => prev.filter(r => r.id !== requestId));
+      setWatcherActionMsg(action === 'APPROVE' ? 'Granted session access.' : 'Access request rejected.');
+    }
+  };
 
   const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
   const [updateCheckMsg, setUpdateCheckMsg] = useState<string | null>(null);
@@ -385,7 +443,167 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         )}
       </div>
 
-      {/* 4. App Version Details Card */}
+      {/* 4. Friends, Watchers & Privacy */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs space-y-3.5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Eye className="w-4 h-4 text-indigo-500" />
+            <h3 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+              Friends, Watchers & Privacy
+            </h3>
+          </div>
+          {currentUser && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+              {watchersList.length} {watchersList.length === 1 ? 'Watcher' : 'Watchers'}
+            </span>
+          )}
+        </div>
+
+        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          Manage friend access to your private study sessions. Watchers have blanket permission to inspect all your logs and feedback.
+        </p>
+
+        {currentUser ? (
+          <div className="space-y-3">
+            {/* Session Access Requests Inbox (if any) */}
+            {accessRequests.length > 0 && (
+              <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/60 rounded-xl p-3 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
+                  <Inbox className="w-3.5 h-3.5" />
+                  <span>Incoming Session Access Requests ({accessRequests.length})</span>
+                </div>
+                <div className="space-y-1.5">
+                  {accessRequests.map((req) => (
+                    <div
+                      key={req.id}
+                      className="bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-amber-200 dark:border-amber-900 flex items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-800 dark:text-slate-100 block truncate">
+                          @{req.requester.username}
+                        </span>
+                        <span className="text-[10px] text-slate-400 truncate block">
+                          requested: {req.session?.title || 'Study Session'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => handleRespondRequest(req.id, 'APPROVE')}
+                          className="px-2.5 py-1 text-[11px] font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 active:scale-95 transition-all"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleRespondRequest(req.id, 'REJECT')}
+                          className="px-2.5 py-1 text-[11px] font-bold bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400 border border-rose-200 dark:border-rose-900 rounded-lg hover:bg-rose-100 active:scale-95 transition-all"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Add Watcher Form */}
+            <form onSubmit={handleAddWatcher} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Add watcher by @username..."
+                value={newWatcherInput}
+                onChange={(e) => setNewWatcherInput(e.target.value)}
+                className="flex-1 px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 outline-hidden focus:border-indigo-500"
+              />
+              <button
+                type="submit"
+                disabled={isAddingWatcher || !newWatcherInput.trim()}
+                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all active:scale-95 shadow-xs"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>{isAddingWatcher ? 'Adding...' : 'Add'}</span>
+              </button>
+            </form>
+
+            {watcherActionMsg && (
+              <p className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 p-2 rounded-lg">
+                {watcherActionMsg}
+              </p>
+            )}
+
+            {/* Current Watchers List */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                People Watching Your Study Logs:
+              </span>
+              {watchersList.length === 0 ? (
+                <p className="text-[11px] text-slate-400 italic bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl">
+                  No watchers added yet. Add a friend's username above so they can see all your study logs.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {watchersList.map((watcher) => (
+                    <div
+                      key={watcher.id}
+                      className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-xs"
+                    >
+                      <button
+                        onClick={() => setInspectUserId(watcher.id)}
+                        className="font-bold text-slate-800 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1.5 text-left"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>{watcher.displayName || watcher.username}</span>
+                        <span className="text-[10px] text-slate-400">(@{watcher.username})</span>
+                      </button>
+                      <button
+                        onClick={() => handleRemoveWatcher(watcher.id, watcher.displayName || watcher.username)}
+                        className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline px-2 py-0.5"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* People You Are Watching */}
+            {watchingList.length > 0 && (
+              <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                  Friends You Are Watching:
+                </span>
+                <div className="space-y-1.5">
+                  {watchingList.map((target) => (
+                    <div
+                      key={target.id}
+                      className="flex items-center justify-between p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-xs"
+                    >
+                      <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                        <Shield className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>{target.displayName || target.username}</span>
+                        <span className="text-[10px] text-slate-400">(@{target.username})</span>
+                      </div>
+                      <button
+                        onClick={() => setInspectUserId(target.id)}
+                        className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline px-2 py-0.5"
+                      >
+                        View Logs →
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl text-xs text-slate-400 text-center">
+            Sign in to your StudyForge cloud account to manage friends, watchers, and access permissions.
+          </div>
+        )}
+      </div>
+
+      {/* 5. App Version Details Card */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs space-y-2.5">
         <div className="flex items-center gap-2">
           <Info className="w-4 h-4 text-slate-500" />
@@ -438,6 +656,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <UpdateModal
           release={pendingRelease}
           onClose={() => setPendingRelease(null)}
+        />
+      )}
+
+      {inspectUserId && (
+        <UserProfileModal
+          userId={inspectUserId}
+          isOpen={Boolean(inspectUserId)}
+          onClose={() => {
+            setInspectUserId(null);
+            loadSocialData();
+          }}
+          currentUser={currentUser}
         />
       )}
     </div>

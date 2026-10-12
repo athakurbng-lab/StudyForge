@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Clock, Sparkles, Trash2, AlertCircle, AlertTriangle, Filter, RotateCcw } from 'lucide-react';
+import { Clock, Sparkles, Trash2, AlertCircle, AlertTriangle, Filter, RotateCcw, Globe, Lock } from 'lucide-react';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { StudySession } from '../services/storageService';
 
@@ -11,6 +11,7 @@ interface SessionTimelineProps {
   onResetFilters?: () => void;
   onOpenLogSession?: () => void;
   onDeleteSession?: (sessionId: string) => void;
+  onToggleShareSession?: (session: StudySession) => void;
 }
 
 export const SessionTimeline: React.FC<SessionTimelineProps> = ({
@@ -20,7 +21,8 @@ export const SessionTimeline: React.FC<SessionTimelineProps> = ({
   activeFilterDescription,
   onResetFilters,
   onOpenLogSession,
-  onDeleteSession
+  onDeleteSession,
+  onToggleShareSession
 }) => {
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<StudySession | null>(null);
@@ -191,8 +193,26 @@ export const SessionTimeline: React.FC<SessionTimelineProps> = ({
                     </span>
                   </span>
 
-                  {/* Mood & XP */}
-                  <div className="flex items-center gap-2">
+                  {/* Mood, Privacy & XP */}
+                  <div className="flex items-center gap-1.5">
+                    {/* Privacy badge */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onToggleShareSession) onToggleShareSession(session);
+                      }}
+                      className={`inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md transition-all active:scale-95 ${
+                        session.isShared
+                          ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900'
+                          : 'bg-slate-200/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600'
+                      }`}
+                      title={session.isShared ? 'Public log (Click to make private)' : 'Private log (Click to make public)'}
+                    >
+                      {session.isShared ? <Globe className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
+                      <span>{session.isShared ? 'Public' : 'Private'}</span>
+                    </button>
+
                     {getMoodIcon(session.mood)}
                     <span className="flex items-center gap-0.5 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded-sm">
                       <Sparkles className="w-3 h-3" />
@@ -248,6 +268,25 @@ export const SessionTimeline: React.FC<SessionTimelineProps> = ({
                         <p className="text-[11px] text-slate-700 dark:text-slate-200 leading-relaxed">
                           {session.aiFeedback || 'High retention observed. Concepts synthesized effectively with solid focus stamina.'}
                         </p>
+                      </div>
+                    )}
+
+                    {/* Privacy Toggle Action */}
+                    {onToggleShareSession && (
+                      <div className="flex items-center justify-between p-2 rounded-lg bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-[11px]">
+                        <span className="text-slate-600 dark:text-slate-300">
+                          Visibility: <strong className="font-bold">{session.isShared ? 'Public to friends 🌐' : 'Private 🔒'}</strong>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleShareSession(session);
+                          }}
+                          className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                        >
+                          {session.isShared ? 'Switch to Private' : 'Make Public'}
+                        </button>
                       </div>
                     )}
 

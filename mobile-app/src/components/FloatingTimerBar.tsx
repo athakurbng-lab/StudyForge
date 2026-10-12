@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Play, Pause, Square, Sparkles, X } from 'lucide-react';
+import { Play, Pause, Square, Sparkles, X, Globe, Lock } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { SubjectModule, ExamType } from '../data/exams';
@@ -33,6 +33,7 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
   const [sessionNotes, setSessionNotes] = useState('');
   const [topicName, setTopicName] = useState('');
   const [mood, setMood] = useState<'focused' | 'neutral' | 'distracted'>('focused');
+  const [isShared, setIsShared] = useState<boolean>(true);
   const [isEvaluating, setIsEvaluating] = useState(false);
 
   const triggerCompletionPrompt = useCallback(() => {
@@ -130,7 +131,8 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
       date: now.toISOString().split('T')[0],
       category: currentModule?.category || 'General',
       apiError: evalResult.apiError,
-      usedFallback: evalResult.usedFallback
+      usedFallback: evalResult.usedFallback,
+      isShared
     };
 
     onSessionCompleted(newSession);
@@ -345,6 +347,37 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
                     <span className="text-[11px]">Distracted</span>
                   </button>
                 </div>
+              </div>
+
+              {/* Privacy & Sharing Selector */}
+              <div className="bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`p-1.5 rounded-lg ${isShared ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                    {isShared ? <Globe className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 block">
+                      {isShared ? 'Public Log (Visible to Friends)' : 'Private Log (Restricted)'}
+                    </span>
+                    <span className="text-[9px] text-slate-400 leading-tight block">
+                      {isShared ? 'Visible in friends activity & group chats' : 'Visible only to you and approved Watchers'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsShared(!isShared)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    isShared ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      isShared ? 'translate-x-4.5' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
               </div>
 
               {/* Submit Button */}

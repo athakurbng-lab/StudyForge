@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Sparkles, Clock, BookOpen, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, Sparkles, Clock, BookOpen, CheckCircle, AlertCircle, Globe, Lock } from 'lucide-react';
 import { ExamType, SubjectModule } from '../data/exams';
 import { StudySession } from '../services/storageService';
 import { GeminiService } from '../services/geminiService';
@@ -25,6 +25,7 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
   const [durationMinutes, setDurationMinutes] = useState(30);
   const [notes, setNotes] = useState('');
   const [mood, setMood] = useState<'focused' | 'neutral' | 'distracted'>('focused');
+  const [isShared, setIsShared] = useState<boolean>(true);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,7 +76,8 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
         date: now.toISOString().split('T')[0],
         category: currentModule?.category || 'General',
         apiError: evalResult.apiError,
-        usedFallback: evalResult.usedFallback
+        usedFallback: evalResult.usedFallback,
+        isShared
       };
 
       onSessionCompleted(newSession);
@@ -268,6 +270,39 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
                 <span className="text-[11px] font-bold">Distracted</span>
               </button>
             </div>
+          </div>
+
+          {/* Privacy & Sharing Selector */}
+          <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className={`p-2 rounded-xl ${isShared ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                {isShared ? <Globe className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                  {isShared ? 'Public Log (Visible to Friends)' : 'Private Log (Restricted)'}
+                </span>
+                <span className="text-[10px] text-slate-400 leading-tight block">
+                  {isShared
+                    ? 'Friends and group members can read notes & feedback'
+                    : 'Requires Watcher status or your approval to view'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsShared(!isShared)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                isShared ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  isShared ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
 
           {/* Action Buttons */}

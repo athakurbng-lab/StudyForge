@@ -1,17 +1,17 @@
 {
-  "version": "1.0.2",
-  "versionCode": 3,
+  "version": "1.0.3",
+  "versionCode": 4,
   "releaseDate": "2026-10-12",
   "minSupportedVersion": "1.0.0",
   "changelog": [
+    "👥 Friend Profiles & Watcher Permissions (inspect logs, view streaks & stats)",
+    "🌐 Public vs Private Study Log toggles across all timers and session logs",
+    "📬 Session Access Requests inbox with instant approve/reject actions",
     "📊 Interactive Activity & Focus Graph (7D, 14D, 30D with XP/Time toggles)",
-    "⚡ Expandable graph directly on Home screen + dedicated Analytics tab",
-    "🚀 In-App Self-Updating Engine (Automatic & On-Demand OTA)",
-    "⚠️ Explicit live AI failure notification before offline fallback",
-    "🎯 Daily XP goal customizable presets and cloud sync"
+    "🚀 In-App Self-Updating Engine (Automatic & On-Demand OTA)"
   ],
   "downloadUrl": "https://study-forge-five-pi.vercel.app/StudyForge-OS-v1.0.0.apk",
   "githubUrl": "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.0.apk",
   "fileSizeMb": 4.4,
-  "sha256": "306d8231d90f0952f6474cd33ef295515f2413d2ae6d19b0566005c0f6bbf252"
+  "sha256": "752f822d5447caee70b3f75b7a9e167e280ee021f8a1b9f4a7b89b2ad0d95cc2"
 }

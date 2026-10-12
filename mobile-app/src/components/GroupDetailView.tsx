@@ -11,7 +11,8 @@ import {
   Send, 
   RefreshCw, 
   Sparkles,
-  Swords
+  Swords,
+  Eye
 } from 'lucide-react';
 import { 
   ApiService, 
@@ -20,6 +21,7 @@ import {
   AuthUser 
 } from '../services/apiService';
 import { StorageService } from '../services/storageService';
+import { UserProfileModal } from './UserProfileModal';
 
 interface GroupDetailViewProps {
   groupId: string;
@@ -58,6 +60,8 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     const cached = StorageService.getCachedGroupDetail(groupId, 'daily') || StorageService.getCachedGroupDetail(groupId, 'all-time');
     return !cached?.group;
   });
+
+  const [selectedUserProfileId, setSelectedUserProfileId] = useState<string | null>(null);
   
   // Chat state
   const [messages, setMessages] = useState<GroupChatMessage[]>(() => {
@@ -415,11 +419,16 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
 
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                            {member.displayName}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedUserProfileId(member.userId)}
+                            className="text-xs font-bold text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline truncate text-left flex items-center gap-1 group"
+                          >
+                            <span className="truncate">{member.displayName}</span>
+                            <Eye className="w-3 h-3 text-slate-400 group-hover:text-indigo-500 shrink-0" />
+                          </button>
                           {isMe && (
-                            <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.2 rounded-md font-bold">
+                            <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.2 rounded-md font-bold shrink-0">
                               You
                             </span>
                           )}
@@ -543,6 +552,17 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Friend & User Profile Modal */}
+      {selectedUserProfileId && (
+        <UserProfileModal
+          userId={selectedUserProfileId}
+          isOpen={Boolean(selectedUserProfileId)}
+          onClose={() => setSelectedUserProfileId(null)}
+          currentUser={currentUser}
+          onOpenAuth={onOpenAuth}
+        />
       )}
     </div>
   );

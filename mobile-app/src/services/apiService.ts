@@ -85,7 +85,8 @@ export const ApiService = {
         notes: s.rawText || '',
         aiFeedback: s.aiBreakdown || '',
         date: dateStr,
-        category: s.tags?.[0] || 'Core Subject'
+        category: s.tags?.[0] || 'Core Subject',
+        isShared: Boolean(s.isShared)
       };
     });
   },
@@ -276,7 +277,7 @@ export const ApiService = {
           title: session.topicName ? `${session.moduleName}: ${session.topicName}` : session.moduleName,
           rawText: session.notes || `Completed ${session.durationMinutes} min study sprint on ${session.moduleName}.`,
           tags: [session.category || 'Study', session.exam],
-          isShared: true,
+          isShared: Boolean(session.isShared),
           xpAwarded: session.xpEarned,
           aiBreakdown: session.aiFeedback,
           durationMinutes: session.durationMinutes,
@@ -547,6 +548,158 @@ export const ApiService = {
       return { success: true, message: data.message };
     } catch (err: any) {
       return { success: false, error: err.message || 'Network error sending message' };
+    }
+  },
+
+  // Toggle session privacy (Public <-> Private)
+  async toggleSessionShare(sessionId: string, isShared?: boolean): Promise<boolean> {
+    const token = StorageService.getAuthToken();
+    if (!token) return false;
+    try {
+      const res = await fetch(`${API_BASE}/api/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ isShared })
+      });
+      return res.ok;
+    } catch (err) {
+      console.warn('Toggle session share failed:', err);
+      return false;
+    }
+  },
+
+  // Fetch another user's profile and privacy-controlled sessions
+  async getUserProfile(userId: string): Promise<any> {
+    const token = StorageService.getAuthToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/user/${userId}`, { headers });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      console.warn('Fetch user profile failed:', err);
+      return null;
+    }
+  },
+
+  // Add or remove a watcher (granting or revoking access to your private sessions)
+  async toggleWatcher(targetUserId: string, action: 'add' | 'remove'): Promise<boolean> {
+    const token = StorageService.getAuthToken();
+    if (!token) return false;
+    try {
+      const res = await fetch(`${API_BASE}/api/watchers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ targetUserId, action })
+      });
+      return res.ok;
+    } catch (err) {
+      console.warn('Toggle watcher failed:', err);
+      return false;
+    }
+  },
+
+  // Add watcher by username
+  async addWatcherByUsername(username: string): Promise<{ success: boolean; error?: string }> {
+    const token = StorageService.getAuthToken();
+    if (!token) return { success: false, error: 'Sign-in required' };
+    try {
+      const res = await fetch(`${API_BASE}/api/watchers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ username, action: 'add' })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || 'Failed to add watcher' };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error adding watcher' };
+    }
+  },
+
+  // Get list of watchers (watching me) and watching (I am watching)
+  async getWatchers(): Promise<{ watchers: any[]; watching: any[] }> {
+    const token = StorageService.getAuthToken();
+    if (!token) return { watchers: [], watching: [] };
+    try {
+      const res = await fetch(`${API_BASE}/api/watchers`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) return { watchers: [], watching: [] };
+      const data = await res.json();
+      return { watchers: data.watchers || [], watching: data.watching || [] };
+    } catch (err) {
+      console.warn('Get watchers failed:', err);
+      return { watchers: [], watching: [] };
+    }
+  },
+
+  // Request access to another user's private session
+  async requestSessionAccess(sessionId: string): Promise<{ success: boolean; error?: string }> {
+    const token = StorageService.getAuthToken();
+    if (!token) return { success: false, error: 'Sign in to request access' };
+    try {
+      const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/request`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || 'Failed to request access' };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error requesting access' };
+    }
+  },
+
+  // Get incoming pending session access requests for me
+  async getAccessRequests(): Promise<any[]> {
+    const token = StorageService.getAuthToken();
+    if (!token) return [];
+    try {
+      const res = await fetch(`${API_BASE}/api/requests`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.requests || [];
+    } catch (err) {
+      console.warn('Get access requests failed:', err);
+      return [];
+    }
+  },
+
+  // Approve or Reject an access request
+  async respondToAccessRequest(requestId: string, action: 'APPROVE' | 'REJECT'): Promise<boolean> {
+    const token = StorageService.getAuthToken();
+    if (!token) return false;
+    try {
+      const res = await fetch(`${API_BASE}/api/requests`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ requestId, action })
+      });
+      return res.ok;
+    } catch (err) {
+      console.warn('Respond to access request failed:', err);
+      return false;
     }
   }
 };

@@ -158,6 +158,18 @@ export const App: React.FC = () => {
     }
   };
 
+  // Toggle session privacy (Public <-> Private)
+  const handleToggleShareSession = async (session: StudySession) => {
+    const updated = StorageService.toggleSessionShare(session.id);
+    if (updated) {
+      setSessions(StorageService.getSessions());
+      const cloudId = session.cloudId || (!session.id.startsWith('sess-') ? session.id : undefined);
+      if (cloudId) {
+        await ApiService.toggleSessionShare(cloudId, updated.isShared);
+      }
+    }
+  };
+
   // Session Completed handler
   const handleSessionCompleted = (newSession: StudySession) => {
     StorageService.addSession(newSession);
@@ -362,6 +374,7 @@ export const App: React.FC = () => {
               onResetFilters={handleResetFilters}
               onOpenLogSession={() => setIsLogSessionOpen(true)}
               onDeleteSession={handleDeleteSession}
+              onToggleShareSession={handleToggleShareSession}
             />
           </div>
         )}
