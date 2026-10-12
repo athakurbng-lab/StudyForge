@@ -8,11 +8,13 @@ import { ApiService } from '../services/apiService';
 interface SettingsViewProps {
   settings: UserSettings;
   onUpdateSettings: (newSettings: UserSettings) => void;
+  onUpdateDailyGoal?: (newGoal: number) => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
-  onUpdateSettings
+  onUpdateSettings,
+  onUpdateDailyGoal
 }) => {
   const [apiKeyInput, setApiKeyInput] = useState(settings.geminiApiKey || '');
   const [isTestingKey, setIsTestingKey] = useState(false);
@@ -86,6 +88,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     try {
       setDailyGoalInput(finalVal);
       await ApiService.updateDailyGoal(finalVal);
+      onUpdateDailyGoal?.(finalVal);
       setDailyGoalMsg(`Daily goal saved: ${finalVal} XP`);
       setTimeout(() => setDailyGoalMsg(null), 3000);
     } catch {

@@ -2,6 +2,7 @@ import { ExamType, SubjectModule, TopicProgress, EXAMS_DATA } from '../data/exam
 
 export interface StudySession {
   id: string;
+  cloudId?: string;
   exam: ExamType;
   moduleId: string;
   moduleName: string;
@@ -238,12 +239,21 @@ export const StorageService = {
     this.setTotalXp(currentXp + session.xpEarned);
   },
 
-  deleteSession(sessionId: string): { deleted: boolean; xpDeducted: number } {
+  updateSessionCloudId(localId: string, cloudId: string): void {
     const list = this.getSessions();
-    const target = list.find(s => s.id === sessionId);
+    const target = list.find(s => s.id === localId);
+    if (target) {
+      target.cloudId = cloudId;
+      localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(list));
+    }
+  },
+
+  deleteSession(sessionId: string): { deleted: boolean; xpDeducted: number; cloudId?: string } {
+    const list = this.getSessions();
+    const target = list.find(s => s.id === sessionId || s.cloudId === sessionId);
     if (!target) return { deleted: false, xpDeducted: 0 };
 
-    const updated = list.filter(s => s.id !== sessionId);
+    const updated = list.filter(s => s.id !== target.id);
     localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(updated));
 
     const xpDeducted = target.xpEarned || 0;
@@ -251,7 +261,8 @@ export const StorageService = {
       const currentXp = this.getTotalXp();
       this.setTotalXp(Math.max(0, currentXp - xpDeducted));
     }
-    return { deleted: true, xpDeducted };
+    const resolvedCloudId = target.cloudId || (!target.id.startsWith('sess-') ? target.id : undefined);
+    return { deleted: true, xpDeducted, cloudId: resolvedCloudId };
   },
 
   getDailyXpGoal(): number {

@@ -9,7 +9,11 @@ let currentKeyIndex = 0;
 
 export async function POST(request: Request) {
   try {
-    const token = cookies().get('token')?.value;
+    let token = cookies().get('token')?.value;
+    const authHeader = request.headers.get('authorization');
+    if (!token && authHeader?.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const payload = await verifyAuthToken(token);
     if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

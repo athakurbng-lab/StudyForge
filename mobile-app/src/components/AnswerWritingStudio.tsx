@@ -14,13 +14,21 @@ export const AnswerWritingStudio: React.FC<AnswerWritingStudioProps> = ({
   exam,
   onSessionCompleted
 }) => {
-  const [question, setQuestion] = useState(
-    exam === 'upsc'
+  const getDefaultQuestion = (examType: ExamType) => {
+    return examType === 'upsc'
       ? 'Q. Critically examine the concept of "Cultural Relativism" and discuss its relevance in contemporary human rights debates, citing anthropological thinkers.'
-      : exam === 'neet_pg'
+      : examType === 'neet_pg'
       ? 'Case: A 3-year-old child presents with sudden onset barking cough, inspiratory stridor, and hoarseness. X-ray shows steeple sign. Discuss etiology, differential, and immediate management.'
-      : 'Drill: Solve 5 high-level quadratic inequalities and 5 missing term number series under 10 minutes.'
-  );
+      : 'Drill: Solve 5 high-level quadratic inequalities and 5 missing term number series under 10 minutes.';
+  };
+
+  const [question, setQuestion] = useState(() => getDefaultQuestion(exam));
+
+  React.useEffect(() => {
+    setQuestion(getDefaultQuestion(exam));
+    setStudentAnswer('');
+    setEvalResult(null);
+  }, [exam]);
 
   const [studentAnswer, setStudentAnswer] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

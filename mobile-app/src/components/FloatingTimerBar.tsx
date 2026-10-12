@@ -96,9 +96,8 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
   const handleSaveSession = async () => {
     setIsEvaluating(true);
 
-    const durationMinutes = mode === 'pomodoro'
-      ? Math.max(1, Math.round((pomodoroTargetSeconds - secondsLeft) / 60) || Math.round(pomodoroTargetSeconds / 60))
-      : Math.max(1, Math.round(elapsedSeconds / 60));
+    const actualSecondsSpent = mode === 'pomodoro' ? (pomodoroTargetSeconds - secondsLeft) : elapsedSeconds;
+    const durationMinutes = Math.max(1, Math.round(actualSecondsSpent / 60));
 
     const now = new Date();
     const endTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

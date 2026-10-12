@@ -390,7 +390,7 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                     >
                       <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mb-0.5 px-1">
                         <span className="font-bold text-slate-600 dark:text-slate-300">
-                          {isMine ? 'You' : msg.user.displayName || msg.user.username}
+                          {isMine ? 'You' : msg.user?.displayName || msg.user?.username || 'Peer'}
                         </span>
                         <span>•</span>
                         <span>{date}</span>

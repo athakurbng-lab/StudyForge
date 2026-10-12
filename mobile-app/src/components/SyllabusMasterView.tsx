@@ -11,6 +11,7 @@ interface SyllabusMasterViewProps {
   onAddModule: (newModule: SubjectModule) => void;
   onDeleteModule: (moduleId: string) => void;
   onSessionCompleted: (session: StudySession) => void;
+  onModulesUpdated?: () => void;
 }
 
 export const SyllabusMasterView: React.FC<SyllabusMasterViewProps> = ({
@@ -18,7 +19,8 @@ export const SyllabusMasterView: React.FC<SyllabusMasterViewProps> = ({
   modules,
   onAddModule,
   onDeleteModule,
-  onSessionCompleted
+  onSessionCompleted,
+  onModulesUpdated
 }) => {
   const [expandedModuleId, setExpandedModuleId] = useState<string | null>(modules[0]?.id || null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -74,6 +76,7 @@ export const SyllabusMasterView: React.FC<SyllabusMasterViewProps> = ({
     if (targetModule) {
       targetModule.topics.push(newTopic);
     }
+    onModulesUpdated?.();
     setNewTopicName('');
     setAddingTopicModuleId(null);
   };

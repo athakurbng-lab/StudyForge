@@ -254,12 +254,12 @@ export const ApiService = {
   },
 
   // Asynchronously upload a completed mobile session to the live website database
-  async syncSessionToCloud(session: StudySession): Promise<void> {
+  async syncSessionToCloud(session: StudySession): Promise<string | null> {
     const token = StorageService.getAuthToken();
-    if (!token) return;
+    if (!token) return null;
 
     try {
-      await fetch(`${API_BASE}/api/sessions`, {
+      const res = await fetch(`${API_BASE}/api/sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -272,9 +272,17 @@ export const ApiService = {
           isShared: true
         })
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.session?.id) {
+          StorageService.updateSessionCloudId(session.id, data.session.id);
+          return data.session.id;
+        }
+      }
     } catch (err) {
       console.warn('Session cloud upload failed (saved locally):', err);
     }
+    return null;
   },
 
   async getGroups(forceRefresh = false): Promise<GroupItem[]> {

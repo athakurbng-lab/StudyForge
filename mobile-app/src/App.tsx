@@ -136,7 +136,10 @@ export const App: React.FC = () => {
     if (res.deleted) {
       setSessions(StorageService.getSessions());
       setTotalXp(StorageService.getTotalXp());
-      await ApiService.deleteCloudSession(sessionId);
+      const cloudIdToDelete = res.cloudId || sessionId;
+      if (cloudIdToDelete) {
+        await ApiService.deleteCloudSession(cloudIdToDelete);
+      }
     }
   };
 
@@ -294,6 +297,7 @@ export const App: React.FC = () => {
             onAddModule={handleAddModule}
             onDeleteModule={handleDeleteModule}
             onSessionCompleted={handleSessionCompleted}
+            onModulesUpdated={() => setModules(StorageService.getModulesForExam(activeExam))}
           />
         )}
 
@@ -322,6 +326,7 @@ export const App: React.FC = () => {
           <SettingsView
             settings={settings}
             onUpdateSettings={handleUpdateSettings}
+            onUpdateDailyGoal={handleUpdateDailyGoal}
           />
         )}
       </main>
