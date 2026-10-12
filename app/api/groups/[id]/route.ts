@@ -69,6 +69,16 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
     const currentUserMember = userId ? group.members.find(m => m.userId === userId) : null;
 
+    let challengedUserIds: string[] = [];
+    if (userId) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const myChallenges = await prisma.scoreChallenge.findMany({
+        where: { challengerId: userId, challengeDate: todayStr, groupId: params.id },
+        select: { targetUserId: true }
+      });
+      challengedUserIds = myChallenges.map(c => c.targetUserId);
+    }
+
     const formattedMembers = group.members.map((m: any) => {
       let timeframeXP = m.user.totalXP;
       if (dateFilter && Array.isArray(m.user.studySessions)) {
@@ -101,7 +111,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
           status: 200, 
           headers: { 
             'ETag': `"${hash}"`,
-            'Cache-Control': 'public, max-age=10, stale-while-revalidate=60'
+            'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate'
           } 
         }
       );
@@ -122,6 +132,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
           memberCount: group.members.length,
           isMember,
           myRole: currentUserMember ? currentUserMember.role : null,
+          timeframe,
+          challengedUserIds,
           members: formattedMembers
         }
       },
@@ -129,7 +141,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
         status: 200, 
         headers: { 
           'ETag': `"${hash}"`,
-          'Cache-Control': 'public, max-age=10, stale-while-revalidate=60'
+          'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate'
         } 
       }
     );

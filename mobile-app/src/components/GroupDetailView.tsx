@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, 
   Copy, 
@@ -10,7 +10,8 @@ import {
   Shield, 
   Send, 
   RefreshCw, 
-  Sparkles 
+  Sparkles,
+  Swords
 } from 'lucide-react';
 import { 
   ApiService, 
@@ -33,15 +34,28 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   onBack,
   onOpenAuth
 }) => {
-  const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly' | 'all-time'>('all-time');
+  const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly' | 'all-time'>('daily');
+  const activeTimeframeRef = useRef<'daily' | 'weekly' | 'monthly' | 'all-time'>('daily');
+  const activeRequestIdRef = useRef<number>(0);
+
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'chat'>('leaderboard');
 
+  // In-memory cache by timeframe for instant tab switching
+  const [groupsCache, setGroupsCache] = useState<Record<string, GroupDetailItem>>(() => {
+    const init: Record<string, GroupDetailItem> = {};
+    for (const tf of ['daily', 'weekly', 'monthly', 'all-time']) {
+      const c = StorageService.getCachedGroupDetail(groupId, tf);
+      if (c?.group) init[tf] = c.group;
+    }
+    return init;
+  });
+
   const [group, setGroup] = useState<GroupDetailItem | null>(() => {
-    const cached = StorageService.getCachedGroupDetail(groupId, 'all-time');
+    const cached = StorageService.getCachedGroupDetail(groupId, 'daily') || StorageService.getCachedGroupDetail(groupId, 'all-time');
     return cached?.group || null;
   });
   const [loading, setLoading] = useState<boolean>(() => {
-    const cached = StorageService.getCachedGroupDetail(groupId, 'all-time');
+    const cached = StorageService.getCachedGroupDetail(groupId, 'daily') || StorageService.getCachedGroupDetail(groupId, 'all-time');
     return !cached?.group;
   });
   
@@ -57,18 +71,41 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   const [messageInput, setMessageInput] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
 
-  // Copy feedback
+  // Copy feedback & Challenge state
   const [copiedCode, setCopiedCode] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [challengingUserId, setChallengingUserId] = useState<string | null>(null);
 
+  // Synchronize active timeframe and fetch without race conditions
   useEffect(() => {
-    // When timeframe changes, check if we have it cached for this timeframe first
-    const cached = StorageService.getCachedGroupDetail(groupId, timeframe);
-    if (cached?.group) {
-      setGroup(cached.group);
+    activeTimeframeRef.current = timeframe;
+    const reqId = ++activeRequestIdRef.current;
+
+    // Check cached data for this specific timeframe first
+    const cached = groupsCache[timeframe] || StorageService.getCachedGroupDetail(groupId, timeframe)?.group;
+    if (cached) {
+      setGroup(cached);
       setLoading(false);
+    } else {
+      setLoading(true);
     }
-    fetchDetail(false);
+
+    // Background fetch for this specific timeframe
+    ApiService.getGroupDetail(groupId, timeframe, false).then((data) => {
+      // Discard response if user has already switched away or a newer request was dispatched
+      if (activeRequestIdRef.current !== reqId || activeTimeframeRef.current !== timeframe) {
+        return;
+      }
+      if (data) {
+        setGroupsCache(prev => ({ ...prev, [timeframe]: data }));
+        setGroup(data);
+      }
+      setLoading(false);
+    }).catch(() => {
+      if (activeRequestIdRef.current === reqId && activeTimeframeRef.current === timeframe) {
+        setLoading(false);
+      }
+    });
   }, [groupId, timeframe]);
 
   useEffect(() => {
@@ -82,14 +119,35 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     }
   }, [groupId, activeTab]);
 
-  const fetchDetail = async (force = false) => {
-    const cached = StorageService.getCachedGroupDetail(groupId, timeframe);
-    if (!cached?.group) {
+  const handleSelectTimeframe = (tf: 'daily' | 'weekly' | 'monthly' | 'all-time') => {
+    if (timeframe === tf) return;
+    activeTimeframeRef.current = tf;
+    setTimeframe(tf);
+
+    // Immediately display from cache if available (0ms instant UI update)
+    const cached = groupsCache[tf] || StorageService.getCachedGroupDetail(groupId, tf)?.group;
+    if (cached) {
+      setGroup(cached);
+      setLoading(false);
+    } else {
       setLoading(true);
     }
-    const data = await ApiService.getGroupDetail(groupId, timeframe, force);
-    if (data) setGroup(data);
-    setLoading(false);
+  };
+
+  const fetchDetail = async (targetTf = timeframe, force = false) => {
+    const reqId = ++activeRequestIdRef.current;
+    const cached = groupsCache[targetTf] || StorageService.getCachedGroupDetail(groupId, targetTf)?.group;
+    if (!cached) {
+      setLoading(true);
+    }
+    const data = await ApiService.getGroupDetail(groupId, targetTf, force);
+    if (activeRequestIdRef.current === reqId && activeTimeframeRef.current === targetTf) {
+      if (data) {
+        setGroupsCache(prev => ({ ...prev, [targetTf]: data }));
+        setGroup(data);
+      }
+      setLoading(false);
+    }
   };
 
   const fetchChat = async (force = false) => {
@@ -100,6 +158,38 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
     const msgs = await ApiService.getGroupChat(groupId, force);
     setMessages(msgs);
     setLoadingChat(false);
+  };
+
+  const handleChallenge = async (targetUserId: string) => {
+    if (!currentUser) {
+      onOpenAuth();
+      return;
+    }
+    setChallengingUserId(targetUserId);
+    const res = await ApiService.evaluateChallenge(targetUserId, groupId);
+    setChallengingUserId(null);
+    setActionMsg(res.message);
+    if (res.success) {
+      setGroup(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          challengedUserIds: [...(prev.challengedUserIds || []), targetUserId]
+        };
+      });
+      setGroupsCache(prev => {
+        const currentGroup = prev[timeframe];
+        if (!currentGroup) return prev;
+        return {
+          ...prev,
+          [timeframe]: {
+            ...currentGroup,
+            challengedUserIds: [...(currentGroup.challengedUserIds || []), targetUserId]
+          }
+        };
+      });
+    }
+    setTimeout(() => setActionMsg(null), 4000);
   };
 
   const handleCopyCode = (code: string) => {
@@ -182,7 +272,7 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
 
         <button
           onClick={() => {
-            fetchDetail(true);
+            fetchDetail(timeframe, true);
             if (activeTab === 'chat') fetchChat(true);
           }}
           className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-xs"
@@ -280,7 +370,7 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
             {(['daily', 'weekly', 'monthly', 'all-time'] as const).map((tf) => (
               <button
                 key={tf}
-                onClick={() => setTimeframe(tf)}
+                onClick={() => handleSelectTimeframe(tf)}
                 className={`px-3 py-1.5 rounded-xl capitalize transition-all ${
                   timeframe === tf
                     ? 'bg-indigo-600 text-white shadow-xs'
@@ -347,11 +437,34 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                       </div>
                     </div>
 
-                    <div className="text-right shrink-0">
-                      <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 block">
-                        {member.timeframeXP.toLocaleString()} XP
-                      </span>
-                      <span className="text-[10px] text-slate-400 capitalize">{timeframe}</span>
+                    <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                      <div>
+                        <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 block">
+                          {member.timeframeXP.toLocaleString()} XP
+                        </span>
+                        <span className="text-[10px] text-slate-400 capitalize">{timeframe}</span>
+                      </div>
+
+                      {/* Daily Challenge Token Button */}
+                      {timeframe === 'daily' && !isMe && (
+                        <div>
+                          {group.challengedUserIds?.includes(member.userId) ? (
+                            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
+                              Challenged ⚔️
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleChallenge(member.userId)}
+                              disabled={challengingUserId === member.userId}
+                              className="text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 px-2 py-0.5 rounded-full transition-all active:scale-95 flex items-center gap-1"
+                              title="Costs 1 Challenge Token"
+                            >
+                              <Swords className="w-2.5 h-2.5" />
+                              <span>{challengingUserId === member.userId ? 'Evaluating...' : 'Challenge'}</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

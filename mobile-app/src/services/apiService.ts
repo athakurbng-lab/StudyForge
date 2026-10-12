@@ -39,6 +39,8 @@ export interface GroupMemberItem {
 export interface GroupDetailItem extends GroupItem {
   members: GroupMemberItem[];
   myRole?: string | null;
+  timeframe?: string;
+  challengedUserIds?: string[];
 }
 
 export interface GroupChatMessage {
@@ -410,26 +412,60 @@ export const ApiService = {
       const params = new URLSearchParams({ timeframe });
       if (clientHash) params.set('clientHash', clientHash);
 
-      const res = await fetch(`${API_BASE}/api/groups/${groupId}?${params.toString()}`, { headers });
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}?${params.toString()}`, { 
+        headers,
+        cache: 'no-store'
+      });
       if (res.ok) {
         const data = await res.json();
-        if (data.notModified && cached) {
-          return cached.group;
+        if (data.notModified && cached?.group) {
+          return { ...cached.group, timeframe };
         }
 
         if (data.success && data.group) {
+          const groupWithTf = {
+            ...data.group,
+            timeframe: data.group.timeframe || timeframe
+          };
           if (data.hash) {
-            StorageService.saveCachedGroupDetail(groupId, timeframe, data.group, data.hash);
+            StorageService.saveCachedGroupDetail(groupId, timeframe, groupWithTf, data.hash);
           }
-          return data.group;
+          return groupWithTf;
         }
       }
     } catch (err) {
       console.warn('Failed to fetch group detail:', err);
     }
 
-    if (cached) return cached.group;
+    if (cached?.group) return { ...cached.group, timeframe };
     return null;
+  },
+
+  async evaluateChallenge(targetUserId: string, groupId: string): Promise<{ success: boolean; message: string; tokensRemaining?: number; error?: string }> {
+    const token = StorageService.getAuthToken();
+    if (!token) return { success: false, message: 'Please sign in to challenge' };
+
+    try {
+      const res = await fetch(`${API_BASE}/api/challenges/evaluate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ targetUserId, groupId })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, message: data.error || 'Failed to evaluate challenge', error: data.error };
+      }
+      return {
+        success: true,
+        message: data.message || 'Challenge evaluation complete!',
+        tokensRemaining: data.tokensRemaining
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error evaluating challenge', error: err.message };
+    }
   },
 
   async getGroupChat(groupId: string, forceRefresh = false): Promise<GroupChatMessage[]> {
