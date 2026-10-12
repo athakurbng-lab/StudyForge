@@ -10,7 +10,6 @@ import { ByIntentionView } from './components/ByIntentionView';
 import { SessionTimeline } from './components/SessionTimeline';
 import { FloatingTimerBar } from './components/FloatingTimerBar';
 import { SyllabusMasterView } from './components/SyllabusMasterView';
-import { AnswerWritingStudio } from './components/AnswerWritingStudio';
 import { AnalyticsView } from './components/AnalyticsView';
 import { SettingsView } from './components/SettingsView';
 import { GroupsView } from './components/GroupsView';
@@ -305,13 +304,6 @@ export const App: React.FC = () => {
           <GroupsView
             currentUser={currentUser}
             onOpenAuth={() => setIsAuthOpen(true)}
-          />
-        )}
-
-        {activeTab === 'studio' && (
-          <AnswerWritingStudio
-            exam={activeExam}
-            onSessionCompleted={handleSessionCompleted}
           />
         )}
 

@@ -166,7 +166,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-slate-900 dark:text-slate-100">Select Exam Stream</h3>
-                  <p className="text-[11px] text-slate-400">Syllabus, modules & studio adapt instantly</p>
+                  <p className="text-[11px] text-slate-400">Syllabus & modules adapt instantly</p>
                 </div>
               </div>
               <button
