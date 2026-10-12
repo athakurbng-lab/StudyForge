@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { App as CapApp } from '@capacitor/app';
 import { StorageService, StudySession, UserSettings } from './services/storageService';
 import { ExamType, SubjectModule } from './data/exams';
 import { NotificationService } from './services/notificationService';
@@ -83,15 +84,54 @@ export const App: React.FC = () => {
       NotificationService.scheduleInactivityAlert(h, m);
     });
 
-    // Check for OTA app update from GitHub releases / server
-    UpdateService.checkForUpdate().then((res) => {
+  }, []);
+
+  // Check for OTA update on app start and resume
+  const checkAppUpdate = useCallback(async () => {
+    try {
+      const res = await UpdateService.checkForUpdate(true);
       if (res.hasUpdate && res.release) {
         setAvailableUpdate(res.release);
       }
-    }).catch(() => {
+    } catch {
       // Ignore background check errors
-    });
+    }
   }, []);
+
+  useEffect(() => {
+    // 1. Immediately check on app launch
+    checkAppUpdate();
+
+    // 2. Also check when user returns to app / screen turns on
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        checkAppUpdate();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    let isMounted = true;
+    let appListener: any = null;
+    CapApp.addListener('appStateChange', (state) => {
+      if (state.isActive) {
+        checkAppUpdate();
+      }
+    }).then((h) => {
+      if (!isMounted) {
+        h?.remove();
+      } else {
+        appListener = h;
+      }
+    }).catch(() => {});
+
+    return () => {
+      isMounted = false;
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (appListener && typeof appListener.remove === 'function') {
+        appListener.remove();
+      }
+    };
+  }, [checkAppUpdate]);
 
   // Theme Sync effect
   useEffect(() => {

@@ -9,9 +9,9 @@ export interface AppReleaseInfo {
   sha256?: string;
 }
 
-export const CURRENT_VERSION = 'v1.0.4';
-export const CURRENT_VERSION_CODE = 5;
-export const CURRENT_BUILD_NUMBER = '2026.10.12-v5';
+export const CURRENT_VERSION = 'v1.0.5';
+export const CURRENT_VERSION_CODE = 6;
+export const CURRENT_BUILD_NUMBER = '2026.10.12-v6';
 
 const PRIMARY_VERSION_URL = 'https://study-forge-five-pi.vercel.app/api/version';
 const FALLBACK_VERSION_URL = 'https://raw.githubusercontent.com/athakurbng-lab/StudyForge/main/version.json';
@@ -86,8 +86,11 @@ export const UpdateService = {
   },
 
   triggerInstall(release: AppReleaseInfo): void {
-    const fileName = `StudyForge-OS-${release.version}.apk`;
-    const targetUrl = release.downloadUrl || release.githubUrl;
+    const fileName = `StudyForge-OS-v${release.version}.apk`;
+    // Prioritize direct GitHub raw URL with cache buster so stale CDNs or browser caches never serve an old APK
+    const baseUrl = release.githubUrl || release.downloadUrl || 'https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.0.apk';
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    const targetUrl = `${baseUrl}${separator}v=${release.versionCode}&t=${Date.now()}`;
 
     try {
       // 1. Native Android Installer Bridge (via DownloadManager + FileProvider)
@@ -96,7 +99,10 @@ export const UpdateService = {
         return;
       }
 
-      // 2. Fallback for browser / standard intent
+      // 2. Open Android system download manager / browser via Capacitor '_system'
+      window.open(targetUrl, '_system');
+
+      // 3. Fallback anchor click
       const a = document.createElement('a');
       a.href = targetUrl;
       a.download = fileName;

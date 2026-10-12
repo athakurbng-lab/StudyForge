@@ -10,14 +10,15 @@ interface UpdateModalProps {
 
 export const UpdateModal: React.FC<UpdateModalProps> = ({ release, onClose, onSnooze }) => {
   const [isInstalling, setIsInstalling] = useState(false);
+  const [downloadTriggered, setDownloadTriggered] = useState(false);
 
   const handleInstall = () => {
     setIsInstalling(true);
+    setDownloadTriggered(true);
     UpdateService.triggerInstall(release);
     setTimeout(() => {
       setIsInstalling(false);
-      onClose();
-    }, 2500);
+    }, 3500);
   };
 
   const handleDismiss = () => {
@@ -116,6 +117,17 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ release, onClose, onSn
               </>
             )}
           </button>
+
+          {downloadTriggered && (
+            <div className="p-3 bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800/60 rounded-xl text-left space-y-1 animate-in fade-in duration-200">
+              <div className="text-[11px] font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                <span>📥 APK Download Initiated in Browser!</span>
+              </div>
+              <p className="text-[10.5px] leading-relaxed text-indigo-700 dark:text-indigo-300">
+                Check your phone's notification bar or Downloads app. Once downloaded, tap the APK and tap <strong>"Update"</strong> to complete installation.
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center justify-between px-1">
             <button
