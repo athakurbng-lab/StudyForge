@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Key, Trophy, MessageSquare, Shield, Check, Sparkles } from 'lucide-react';
+import { Users, Plus, Key, Trophy, MessageSquare, Shield, Check, Sparkles, RefreshCw } from 'lucide-react';
 import { ApiService, GroupItem, AuthUser } from '../services/apiService';
 
 interface GroupsViewProps {
@@ -20,13 +20,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
+  const [creating, setCreating] = useState(false);
 
   // Selected Group details view
   const [selectedGroup, setSelectedGroup] = useState<GroupItem | null>(null);
 
   useEffect(() => {
     loadGroups();
-  }, []);
+  }, [currentUser]);
 
   const loadGroups = async () => {
     setLoading(true);
@@ -39,30 +40,46 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
     e.preventDefault();
     if (!inviteCodeInput.trim()) return;
 
+    if (!currentUser) {
+      onOpenAuth();
+      return;
+    }
+
     const res = await ApiService.joinGroupByCode(inviteCodeInput.trim());
     setJoinMsg(res.message);
     setInviteCodeInput('');
-    setTimeout(() => setJoinMsg(null), 3000);
+    if (res.success) {
+      await loadGroups();
+    }
+    setTimeout(() => setJoinMsg(null), 3500);
   };
 
-  const handleCreateGroup = (e: React.FormEvent) => {
+  const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGroupName.trim()) return;
 
-    const created: GroupItem = {
-      id: `grp_${Date.now()}`,
-      name: newGroupName.trim(),
-      description: newGroupDesc.trim() || 'Study group for consistent prep.',
-      inviteCode: Math.random().toString(36).substring(2, 8).toUpperCase(),
-      memberCount: 1,
-      isPrivate: false
-    };
+    if (!currentUser) {
+      onOpenAuth();
+      return;
+    }
 
-    setGroups([created, ...groups]);
-    setNewGroupName('');
-    setNewGroupDesc('');
-    setShowCreateModal(false);
-    setSelectedGroup(created);
+    setCreating(true);
+    const res = await ApiService.createGroup(newGroupName.trim(), newGroupDesc.trim(), true);
+    setCreating(false);
+
+    if (res.success && res.group) {
+      setGroups(prev => [res.group!, ...prev.filter(g => g.id !== res.group!.id)]);
+      setSelectedGroup(res.group);
+      setNewGroupName('');
+      setNewGroupDesc('');
+      setShowCreateModal(false);
+      setJoinMsg(`Created group "${res.group.name}"!`);
+      await loadGroups();
+      setTimeout(() => setJoinMsg(null), 3000);
+    } else {
+      setJoinMsg(res.error || 'Failed to create group');
+      setTimeout(() => setJoinMsg(null), 3500);
+    }
   };
 
   return (
@@ -75,17 +92,33 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
             <span>Study Groups & Leaderboards</span>
           </h2>
           <p className="text-[11px] text-slate-400">
-            Collaborate, compete on group leaderboards, and share answer writing notes.
+            Collaborate, compete on group leaderboards, and share study goals.
           </p>
         </div>
 
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-md shadow-indigo-600/20"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>New Group</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={loadGroups}
+            title="Refresh groups from database"
+            className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-xs transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-indigo-500' : ''}`} />
+          </button>
+
+          <button
+            onClick={() => {
+              if (!currentUser) {
+                onOpenAuth();
+              } else {
+                setShowCreateModal(true);
+              }
+            }}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-md shadow-indigo-600/20"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>New Group</span>
+          </button>
+        </div>
       </div>
 
       {/* Sync Banner if not logged in */}
@@ -112,7 +145,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
           <Key className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
           <input
             type="text"
-            placeholder="Enter Group Invite Code (e.g. ANTHRO27)"
+            placeholder="Enter Group Invite Code (e.g. 6MBSWZ2H)"
             value={inviteCodeInput}
             onChange={(e) => setInviteCodeInput(e.target.value)}
             className="w-full text-xs pl-8 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-hidden focus:border-indigo-500 text-slate-800 dark:text-slate-100 uppercase font-mono"
@@ -127,7 +160,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       </form>
 
       {joinMsg && (
-        <div className="text-xs text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+        <div className="text-xs text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 animate-in fade-in duration-200">
           <Check className="w-4 h-4" />
           <span>{joinMsg}</span>
         </div>
@@ -136,11 +169,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
       {/* Group List */}
       <div className="space-y-3">
         {loading ? (
-          <div className="text-center py-8 text-xs text-slate-400">Loading active study groups...</div>
+          <div className="text-center py-8 text-xs text-slate-400 flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin text-indigo-500" />
+            <span>Fetching groups from database...</span>
+          </div>
         ) : groups.length === 0 ? (
           <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-2">
             <Users className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-1" />
-            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">No Study Groups Joined Yet</h4>
+            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">No Study Groups Found</h4>
             <p className="text-[11px] text-slate-400 max-w-xs mx-auto">
               Create your own study squad or enter an invite code above to collaborate with peers.
             </p>
@@ -160,24 +196,50 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
                         {group.name}
                       </h3>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                         {group.inviteCode}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                      {group.description}
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">
+                      {group.description || 'Active study group'}
                     </p>
                   </div>
 
-                  <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-full shrink-0 flex items-center gap-1">
-                    <Users className="w-3 h-3" />
-                    <span>{group.memberCount}</span>
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {group.isMember ? (
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-1 rounded-lg flex items-center gap-1 border border-emerald-200 dark:border-emerald-800">
+                        <Check className="w-3 h-3" />
+                        <span>{group.role === 'SUPER_ADMIN' ? 'Admin' : 'Joined'}</span>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (!currentUser) {
+                            onOpenAuth();
+                            return;
+                          }
+                          const res = await ApiService.joinGroupByCode(group.inviteCode);
+                          setJoinMsg(res.message);
+                          if (res.success) await loadGroups();
+                          setTimeout(() => setJoinMsg(null), 3000);
+                        }}
+                        className="text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded-xl shadow-xs"
+                      >
+                        Join
+                      </button>
+                    )}
+
+                    <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-xl shrink-0 flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      <span>{group.memberCount}</span>
+                    </span>
+                  </div>
                 </div>
 
                 {/* Expanded Group Drawer: Leaderboard & Chat Preview */}
@@ -187,17 +249,17 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                       <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                         <div className="flex items-center justify-center gap-1 text-amber-500 mb-1">
                           <Trophy className="w-4 h-4" />
-                          <span>Group Rank</span>
+                          <span>Group Status</span>
                         </div>
-                        <span className="text-base font-black text-slate-800 dark:text-slate-100">#1 Top Batch</span>
+                        <span className="text-sm font-black text-slate-800 dark:text-slate-100">Active Squad</span>
                       </div>
 
                       <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                         <div className="flex items-center justify-center gap-1 text-indigo-500 mb-1">
                           <Shield className="w-4 h-4" />
-                          <span>Batch Milestone</span>
+                          <span>Invite Code</span>
                         </div>
-                        <span className="text-base font-black text-slate-800 dark:text-slate-100">84% On Track</span>
+                        <span className="text-sm font-mono font-black text-indigo-600 dark:text-indigo-400">{group.inviteCode}</span>
                       </div>
                     </div>
 
@@ -207,10 +269,10 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                           <MessageSquare className="w-3.5 h-3.5 text-indigo-500" />
                           <span>Group Discussion Feed</span>
                         </span>
-                        <span className="text-[10px] text-emerald-500">Active</span>
+                        <span className="text-[10px] text-emerald-500 font-semibold">Live in Sync</span>
                       </div>
                       <p className="text-[11px] text-slate-500 italic">
-                        "Today's topic target: Anthropological theories of religion (Durkheim vs Malinowski) + 2 answers submitted!"
+                        "Share study milestones, log deep sessions, and climb the group leaderboard together."
                       </p>
                     </div>
                   </div>
@@ -253,6 +315,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
+                  disabled={creating}
                   onClick={() => setShowCreateModal(false)}
                   className="flex-1 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold"
                 >
@@ -260,9 +323,10 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold"
+                  disabled={creating}
+                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold disabled:opacity-50"
                 >
-                  Create Group
+                  {creating ? 'Creating...' : 'Create Group'}
                 </button>
               </div>
             </form>

@@ -19,6 +19,8 @@ export interface GroupItem {
   inviteCode: string;
   memberCount: number;
   isPrivate: boolean;
+  isMember?: boolean;
+  role?: string | null;
 }
 
 export const ApiService = {
@@ -196,8 +198,13 @@ export const ApiService = {
 
   async getGroups(): Promise<GroupItem[]> {
     try {
-      // Fetch public groups
-      const res = await fetch(`${API_BASE}/api/groups`);
+      const token = StorageService.getAuthToken();
+      const user = StorageService.getAuthUser();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const url = user?.id ? `${API_BASE}/api/groups?userId=${user.id}` : `${API_BASE}/api/groups`;
+      const res = await fetch(url, { headers });
       if (res.ok) {
         const data = await res.json();
         if (data.groups && Array.isArray(data.groups)) {
@@ -206,8 +213,10 @@ export const ApiService = {
             name: g.name,
             description: g.description || '',
             inviteCode: g.inviteCode || '',
-            memberCount: g._count?.members || g.members?.length || 1,
+            memberCount: g.memberCount ?? (g._count?.members || g.members?.length || 1),
             isPrivate: g.isPrivate || false,
+            isMember: g.isMember || false,
+            role: g.role || null
           }));
         }
       }
@@ -218,8 +227,68 @@ export const ApiService = {
     return [];
   },
 
-  async joinGroupByCode(code: string): Promise<{ success: boolean; message: string }> {
+  async createGroup(name: string, description: string, isPublic: boolean = true): Promise<{ success: boolean; group?: GroupItem; error?: string }> {
+    const token = StorageService.getAuthToken();
+    if (!token) return { success: false, error: 'Sign in required to create groups' };
+
+    try {
+      const res = await fetch(`${API_BASE}/api/groups`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ name, description, isPublic })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, error: data.error || 'Failed to create group' };
+      }
+      return {
+        success: true,
+        group: {
+          id: data.group.id,
+          name: data.group.name,
+          description: data.group.description || '',
+          inviteCode: data.group.inviteCode || '',
+          memberCount: data.group.memberCount || 1,
+          isPrivate: data.group.isPrivate || false,
+          isMember: true,
+          role: 'SUPER_ADMIN'
+        }
+      };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error creating group' };
+    }
+  },
+
+  async joinGroupByCode(code: string): Promise<{ success: boolean; message: string; group?: GroupItem }> {
     if (!code.trim()) return { success: false, message: 'Invite code required' };
-    return { success: true, message: `Successfully joined group with code ${code.toUpperCase()}!` };
+    const token = StorageService.getAuthToken();
+    if (!token) return { success: false, message: 'Please sign in to join groups' };
+
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ code: code.trim().toUpperCase() })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        return { success: false, message: data.error || 'Failed to join group with this code' };
+      }
+
+      return {
+        success: true,
+        message: data.message || 'Successfully joined group!',
+        group: data.group
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error joining group' };
+    }
   }
 };
