@@ -367,8 +367,8 @@ export const StorageService = {
       inactivityAlertTime: '20:30',
       streakSaverEnabled: true,
       spacedRevisionAlertEnabled: true,
-      appVersion: 'v1.0.5 (Production)',
-      buildNumber: '2026.10.12-v6',
+      appVersion: 'v1.0.6 (Production)',
+      buildNumber: '2026.10.12-v7',
     };
     if (!saved) return defaults;
     try {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Play, Pause, Square, Sparkles, X, Globe, Lock } from 'lucide-react';
+import { Play, Pause, Square, Sparkles, X, Globe, Lock, ChevronRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { App } from '@capacitor/app';
@@ -34,6 +34,10 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
   const targetEndTimeRef = useRef<number | null>(null);
   const stopwatchStartTimeRef = useRef<number | null>(null);
 
+  // Auto-hide when idle (not running) after 5 seconds to dock as floating dot on the right
+  const [isAutoHidden, setIsAutoHidden] = useState(false);
+  const autoHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Completion modal state
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [sessionNotes, setSessionNotes] = useState('');
@@ -41,6 +45,37 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
   const [mood, setMood] = useState<'focused' | 'neutral' | 'distracted'>('focused');
   const [isShared, setIsShared] = useState<boolean>(true);
   const [isEvaluating, setIsEvaluating] = useState(false);
+
+  const resetAutoHideTimer = useCallback(() => {
+    if (autoHideTimeoutRef.current) {
+      clearTimeout(autoHideTimeoutRef.current);
+      autoHideTimeoutRef.current = null;
+    }
+    if (!isRunning && !showCompleteModal) {
+      autoHideTimeoutRef.current = setTimeout(() => {
+        setIsAutoHidden(true);
+      }, 5000);
+    }
+  }, [isRunning, showCompleteModal]);
+
+  // Keep expanded while running or evaluating; start 5s idle auto-hide when stopped/idle
+  useEffect(() => {
+    if (isRunning || showCompleteModal) {
+      setIsAutoHidden(false);
+      if (autoHideTimeoutRef.current) {
+        clearTimeout(autoHideTimeoutRef.current);
+        autoHideTimeoutRef.current = null;
+      }
+    } else {
+      resetAutoHideTimer();
+    }
+    return () => {
+      if (autoHideTimeoutRef.current) {
+        clearTimeout(autoHideTimeoutRef.current);
+        autoHideTimeoutRef.current = null;
+      }
+    };
+  }, [isRunning, showCompleteModal, resetAutoHideTimer]);
 
   const currentModule = modules.find((m) => m.id === selectedModuleId) || modules[0];
 
@@ -173,6 +208,7 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
 
     if (!isRunning) {
       // STARTING TIMER
+      setIsAutoHidden(false);
       if (mode === 'pomodoro') {
         const target = Date.now() + secondsLeft * 1000;
         targetEndTimeRef.current = target;
@@ -221,10 +257,12 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
         stopwatchStartTimeRef.current = null;
       }
       localStorage.removeItem('sf_timer_state');
+      resetAutoHideTimer();
     }
   };
 
   const handleToggleMode = () => {
+    resetAutoHideTimer();
     if (isRunning) {
       setIsRunning(false);
       targetEndTimeRef.current = null;
@@ -318,6 +356,7 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
   };
 
   const handleAdjustTime = (deltaMinutes: number) => {
+    resetAutoHideTimer();
     if (mode === 'pomodoro') {
       const nextTarget = Math.max(60, pomodoroTargetSeconds + deltaMinutes * 60);
       const nextLeft = Math.max(0, secondsLeft + deltaMinutes * 60);
@@ -345,97 +384,166 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
 
   return (
     <>
-      {/* Floating Timer Bar matching Screenshot 1 */}
-      <div className="fixed bottom-safe-bar left-3 right-3 z-30 pointer-events-auto">
-        <div className="bg-slate-900/95 dark:bg-slate-800/95 text-white backdrop-blur-md px-3.5 py-2.5 rounded-2xl shadow-xl border border-slate-700/60 space-y-2 transition-all">
-          {/* Top micro-bar: Custom topic input & time quick buttons */}
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="Custom topic (e.g. Anthropology Paper 2, NRP steps)..."
-              value={topicName}
-              onChange={(e) => setTopicName(e.target.value)}
-              className="flex-1 text-[11px] bg-slate-800/80 border border-slate-700/80 rounded-lg px-2.5 py-1 text-slate-100 placeholder-slate-400 outline-hidden focus:border-rose-500"
-            />
-            {mode === 'pomodoro' && (
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => handleAdjustTime(-5)}
-                  className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold rounded-md border border-slate-700"
-                  title="Decrease 5 minutes"
-                >
-                  -5m
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAdjustTime(5)}
-                  className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-rose-400 text-[10px] font-bold rounded-md border border-slate-700"
-                  title="Add 5 minutes"
-                >
-                  +5m
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Main timer row */}
-          <div className="flex items-center justify-between gap-2">
-            {/* Left: Module dropdown */}
-            <div className="flex items-center gap-2 max-w-[42%] min-w-0">
+      {/* Floating Pomodoro Bar: Auto-hides after 5s idle into a docked dot on the right edge */}
+      {isAutoHidden ? (
+        <div className="fixed bottom-safe-bar right-3 z-30 pointer-events-auto animate-in fade-in slide-in-from-right-4 duration-300">
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                Haptics.impact({ style: ImpactStyle.Light });
+              } catch {}
+              setIsAutoHidden(false);
+              resetAutoHideTimer();
+            }}
+            className="flex items-center gap-2 bg-slate-900/95 dark:bg-slate-800/95 text-white backdrop-blur-md pl-2.5 pr-3 py-1.5 rounded-full shadow-2xl border border-slate-700/80 hover:border-rose-500/80 active:scale-95 transition-all group"
+            title="Tap to expand Pomodoro Timer"
+          >
+            <span className="relative flex h-2.5 w-2.5">
               <span
-                className="w-2.5 h-2.5 rounded-full shrink-0"
+                className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
                 style={{ backgroundColor: currentModule?.color || '#e11d48' }}
               />
-              <select
-                value={selectedModuleId}
-                onChange={(e) => setSelectedModuleId(e.target.value)}
-                className="bg-transparent border-none outline-hidden text-xs font-bold text-slate-100 truncate cursor-pointer w-full"
+              <span
+                className="relative inline-flex rounded-full h-2.5 w-2.5"
+                style={{ backgroundColor: currentModule?.color || '#e11d48' }}
+              />
+            </span>
+            <span className="font-mono text-xs font-bold text-slate-100 tracking-wider">
+              {currentDisplayTime}
+            </span>
+            <span className="text-[9px] font-sans font-semibold text-slate-400 uppercase">
+              {mode === 'pomodoro' ? 'pomo' : 'stop'}
+            </span>
+            <div className="w-5 h-5 rounded-full bg-rose-600/90 group-hover:bg-rose-500 flex items-center justify-center text-white shrink-0 shadow-xs ml-0.5">
+              <Play className="w-2.5 h-2.5 fill-current ml-0.5" />
+            </div>
+          </button>
+        </div>
+      ) : (
+        <div
+          className="fixed bottom-safe-bar left-3 right-3 z-30 pointer-events-auto animate-in fade-in slide-in-from-bottom-2 duration-200"
+          onClick={resetAutoHideTimer}
+          onTouchStart={resetAutoHideTimer}
+        >
+          <div className="bg-slate-900/95 dark:bg-slate-800/95 text-white backdrop-blur-md px-3.5 py-2.5 rounded-2xl shadow-xl border border-slate-700/60 space-y-2 transition-all">
+            {/* Top micro-bar: Custom topic input, time quick buttons, and minimize chevron */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Custom topic (e.g. Anthropology Paper 2, NRP steps)..."
+                value={topicName}
+                onChange={(e) => {
+                  setTopicName(e.target.value);
+                  resetAutoHideTimer();
+                }}
+                className="flex-1 text-[11px] bg-slate-800/80 border border-slate-700/80 rounded-lg px-2.5 py-1 text-slate-100 placeholder-slate-400 outline-hidden focus:border-rose-500"
+              />
+              {mode === 'pomodoro' && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleAdjustTime(-5);
+                      resetAutoHideTimer();
+                    }}
+                    className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold rounded-md border border-slate-700"
+                    title="Decrease 5 minutes"
+                  >
+                    -5m
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleAdjustTime(5);
+                      resetAutoHideTimer();
+                    }}
+                    className="px-1.5 py-0.5 bg-slate-800 hover:bg-slate-700 text-rose-400 text-[10px] font-bold rounded-md border border-slate-700"
+                    title="Add 5 minutes"
+                  >
+                    +5m
+                  </button>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    Haptics.impact({ style: ImpactStyle.Light });
+                  } catch {}
+                  setIsAutoHidden(true);
+                }}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+                title="Minimize to floating dot"
               >
-                {modules.map((m) => (
-                  <option key={m.id} value={m.id} className="bg-slate-900 text-white">
-                    {m.name}
-                  </option>
-                ))}
-              </select>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
 
-            {/* Center: Timer digits */}
-            <button
-              onClick={handleToggleMode}
-              title="Tap to toggle Pomodoro / Stopwatch"
-              className="flex items-center gap-1 font-mono text-base font-black tracking-widest text-slate-100 hover:text-rose-400 transition-colors"
-            >
-              <span>{currentDisplayTime}</span>
-              <span className="text-[9px] font-sans font-semibold text-slate-400 uppercase">
-                {mode === 'pomodoro' ? 'pomo' : 'stop'}
-              </span>
-            </button>
+            {/* Main timer row */}
+            <div className="flex items-center justify-between gap-2">
+              {/* Left: Module dropdown */}
+              <div className="flex items-center gap-2 max-w-[42%] min-w-0">
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: currentModule?.color || '#e11d48' }}
+                />
+                <select
+                  value={selectedModuleId}
+                  onChange={(e) => {
+                    setSelectedModuleId(e.target.value);
+                    resetAutoHideTimer();
+                  }}
+                  className="bg-transparent border-none outline-hidden text-xs font-bold text-slate-100 truncate cursor-pointer w-full"
+                >
+                  {modules.map((m) => (
+                    <option key={m.id} value={m.id} className="bg-slate-900 text-white">
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Right: Play / Stop */}
-            <div className="flex items-center gap-1.5 shrink-0">
+              {/* Center: Timer digits */}
               <button
-                onClick={handleToggleTimer}
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                  isRunning
-                    ? 'bg-amber-500 hover:bg-amber-600 text-slate-950'
-                    : 'bg-rose-600 hover:bg-rose-500 text-white'
-                }`}
+                onClick={() => {
+                  handleToggleMode();
+                  resetAutoHideTimer();
+                }}
+                title="Tap to toggle Pomodoro / Stopwatch"
+                className="flex items-center gap-1 font-mono text-base font-black tracking-widest text-slate-100 hover:text-rose-400 transition-colors"
               >
-                {isRunning ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+                <span>{currentDisplayTime}</span>
+                <span className="text-[9px] font-sans font-semibold text-slate-400 uppercase">
+                  {mode === 'pomodoro' ? 'pomo' : 'stop'}
+                </span>
               </button>
 
-              <button
-                onClick={handleStopAndLog}
-                title="End session & claim XP"
-                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition-colors"
-              >
-                <Square className="w-3.5 h-3.5 fill-current" />
-              </button>
+              {/* Right: Play / Stop */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={handleToggleTimer}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                    isRunning
+                      ? 'bg-amber-500 hover:bg-amber-600 text-slate-950'
+                      : 'bg-rose-600 hover:bg-rose-500 text-white'
+                  }`}
+                >
+                  {isRunning ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+                </button>
+
+                <button
+                  onClick={handleStopAndLog}
+                  title="End session & claim XP"
+                  className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition-colors"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Session Completion & AI Evaluation Modal */}
       {showCompleteModal && (

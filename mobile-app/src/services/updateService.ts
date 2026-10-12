@@ -9,9 +9,9 @@ export interface AppReleaseInfo {
   sha256?: string;
 }
 
-export const CURRENT_VERSION = 'v1.0.5';
-export const CURRENT_VERSION_CODE = 6;
-export const CURRENT_BUILD_NUMBER = '2026.10.12-v6';
+export const CURRENT_VERSION = 'v1.0.6';
+export const CURRENT_VERSION_CODE = 7;
+export const CURRENT_BUILD_NUMBER = '2026.10.12-v7';
 
 const PRIMARY_VERSION_URL = 'https://study-forge-five-pi.vercel.app/api/version';
 const FALLBACK_VERSION_URL = 'https://raw.githubusercontent.com/athakurbng-lab/StudyForge/main/version.json';
