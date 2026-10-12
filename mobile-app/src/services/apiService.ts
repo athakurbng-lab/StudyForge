@@ -132,10 +132,15 @@ export const ApiService = {
         StorageService.setDailyXpGoal(data.user.dailyXpGoal);
       }
 
-      // Sync site sessions into device storage if available
+      // Sync site sessions into device storage while preserving unsynced local sessions
+      const existingSessions = StorageService.getSessions();
+      const unsynced = existingSessions.filter(s => !s.cloudId && s.id.startsWith('sess-'));
       if (Array.isArray(data.user.sessions) && data.user.sessions.length > 0) {
         const mapped = this.mapCloudSessions(data.user.sessions);
-        StorageService.saveSessions(mapped);
+        StorageService.saveSessions([...unsynced, ...mapped]);
+      }
+      if (unsynced.length > 0) {
+        this.uploadUnsyncedSessions();
       }
 
       return { success: true, user };
@@ -271,13 +276,22 @@ export const ApiService = {
           title: session.topicName ? `${session.moduleName}: ${session.topicName}` : session.moduleName,
           rawText: session.notes || `Completed ${session.durationMinutes} min study sprint on ${session.moduleName}.`,
           tags: [session.category || 'Study', session.exam],
-          isShared: true
+          isShared: true,
+          xpAwarded: session.xpEarned,
+          aiBreakdown: session.aiFeedback,
+          durationMinutes: session.durationMinutes,
+          mood: session.mood
         })
       });
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.session?.id) {
           StorageService.updateSessionCloudId(session.id, data.session.id);
+          if (data.user) {
+            if (typeof data.user.totalXP === 'number') StorageService.setTotalXp(data.user.totalXP);
+            if (typeof data.user.streak === 'number') StorageService.setStreak(data.user.streak);
+            if (typeof data.user.freezeTokens === 'number') StorageService.setFreezeTokens(data.user.freezeTokens);
+          }
           return data.session.id;
         }
       }
@@ -285,6 +299,16 @@ export const ApiService = {
       console.warn('Session cloud upload failed (saved locally):', err);
     }
     return null;
+  },
+
+  // Upload any offline/local sessions that have not yet synced to the cloud database
+  async uploadUnsyncedSessions(): Promise<void> {
+    const token = StorageService.getAuthToken();
+    if (!token) return;
+    const unsynced = StorageService.getSessions().filter(s => !s.cloudId && s.id.startsWith('sess-'));
+    for (const s of unsynced) {
+      await this.syncSessionToCloud(s);
+    }
   },
 
   async getGroups(forceRefresh = false): Promise<GroupItem[]> {

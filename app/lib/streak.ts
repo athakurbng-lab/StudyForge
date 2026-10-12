@@ -101,7 +101,7 @@ export async function processSessionStreakAndBadges(userId: string, netXpChange:
   const finalFreezeTokens = Math.max(0, user.freezeTokens - tokensUsed + tokensAwarded);
 
   // Update user with new streak, XP, tokens, and lastStudiedAt
-  await prisma.user.update({
+  const updatedUser = await prisma.user.update({
     where: { id: userId },
     data: {
       totalXP: Math.max(0, user.totalXP + netXpChange),
@@ -134,4 +134,6 @@ export async function processSessionStreakAndBadges(userId: string, netXpChange:
       });
     }
   }
+
+  return updatedUser;
 }
