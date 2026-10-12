@@ -20,6 +20,8 @@ import { BottomNav, NavTab } from './components/BottomNav';
 import { DailyGoalModal } from './components/DailyGoalModal';
 import { FilterModal } from './components/FilterModal';
 import { ApiService, AuthUser } from './services/apiService';
+import { UpdateService, AppReleaseInfo } from './services/updateService';
+import { UpdateModal } from './components/UpdateModal';
 
 StorageService.sanitizeStorage();
 
@@ -39,6 +41,7 @@ export const App: React.FC = () => {
   const [isDailyGoalOpen, setIsDailyGoalOpen] = useState<boolean>(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
   const [aiNotice, setAiNotice] = useState<{ message: string; details: string } | null>(null);
+  const [availableUpdate, setAvailableUpdate] = useState<AppReleaseInfo | null>(null);
 
   // Filter States
   const [selectedModuleFilter, setSelectedModuleFilter] = useState<string | null>(null);
@@ -76,6 +79,15 @@ export const App: React.FC = () => {
     NotificationService.init().then(() => {
       const [h, m] = (settings.inactivityAlertTime || '20:30').split(':').map(Number);
       NotificationService.scheduleInactivityAlert(h, m);
+    });
+
+    // Check for OTA app update from GitHub releases / server
+    UpdateService.checkForUpdate().then((res) => {
+      if (res.hasUpdate && res.release) {
+        setAvailableUpdate(res.release);
+      }
+    }).catch(() => {
+      // Ignore background check errors
     });
   }, []);
 
@@ -435,6 +447,14 @@ export const App: React.FC = () => {
         onResetFilters={handleResetFilters}
         activeFilterCount={activeFilterCount}
       />
+
+      {/* OTA In-App Auto Update Modal */}
+      {availableUpdate && (
+        <UpdateModal
+          release={availableUpdate}
+          onClose={() => setAvailableUpdate(null)}
+        />
+      )}
     </div>
   );
 };
