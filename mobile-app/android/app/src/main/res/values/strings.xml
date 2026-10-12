@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">StudyForge OS</string>
+    <string name="title_activity_main">StudyForge OS</string>
+    <string name="package_name">com.studyforge.app</string>
+    <string name="custom_url_scheme">com.studyforge.app</string>
+</resources>
