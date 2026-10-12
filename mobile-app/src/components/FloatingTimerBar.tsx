@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Play, Pause, Square, Sparkles, X, Globe, Lock } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { App } from '@capacitor/app';
 import { SubjectModule, ExamType } from '../data/exams';
 import { GeminiService } from '../services/geminiService';
 import { StudySession } from '../services/storageService';
+import { NotificationService } from '../services/notificationService';
 
 interface FloatingTimerBarProps {
   exam: ExamType;
@@ -28,6 +30,10 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
   const [secondsLeft, setSecondsLeft] = useState(25 * 60); // 25:00
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
+  // Background resilience: absolute timestamps to survive screen-off & process throttling
+  const targetEndTimeRef = useRef<number | null>(null);
+  const stopwatchStartTimeRef = useRef<number | null>(null);
+
   // Completion modal state
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [sessionNotes, setSessionNotes] = useState('');
@@ -36,12 +42,77 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
   const [isShared, setIsShared] = useState<boolean>(true);
   const [isEvaluating, setIsEvaluating] = useState(false);
 
+  const currentModule = modules.find((m) => m.id === selectedModuleId) || modules[0];
+
   const triggerCompletionPrompt = useCallback(() => {
     try {
       Haptics.impact({ style: ImpactStyle.Heavy });
     } catch {}
     setShowCompleteModal(true);
   }, []);
+
+  // Sync timer from real wall-clock timestamps
+  const syncTimer = useCallback(() => {
+    const now = Date.now();
+    if (mode === 'pomodoro') {
+      if (!targetEndTimeRef.current) return;
+      const remaining = Math.max(0, Math.round((targetEndTimeRef.current - now) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining <= 0) {
+        setIsRunning(false);
+        targetEndTimeRef.current = null;
+        NotificationService.cancelPomodoroAlert();
+        localStorage.removeItem('sf_timer_state');
+        triggerCompletionPrompt();
+      }
+    } else {
+      if (!stopwatchStartTimeRef.current) return;
+      const elapsed = Math.max(0, Math.floor((now - stopwatchStartTimeRef.current) / 1000));
+      setElapsedSeconds(elapsed);
+    }
+  }, [mode, triggerCompletionPrompt]);
+
+  // Restore running timer state if app was killed or reloaded
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('sf_timer_state');
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (saved && saved.isRunning) {
+          if (saved.mode === 'pomodoro' && saved.targetEndTime) {
+            const now = Date.now();
+            const remaining = Math.max(0, Math.round((saved.targetEndTime - now) / 1000));
+            setMode('pomodoro');
+            if (saved.pomodoroTargetSeconds) setPomodoroTargetSeconds(saved.pomodoroTargetSeconds);
+            if (saved.selectedModuleId) setSelectedModuleId(saved.selectedModuleId);
+            if (saved.topicName) setTopicName(saved.topicName);
+
+            if (remaining <= 0) {
+              setSecondsLeft(0);
+              setIsRunning(false);
+              localStorage.removeItem('sf_timer_state');
+              triggerCompletionPrompt();
+            } else {
+              setSecondsLeft(remaining);
+              targetEndTimeRef.current = saved.targetEndTime;
+              setIsRunning(true);
+            }
+          } else if (saved.mode === 'stopwatch' && saved.startTime) {
+            const now = Date.now();
+            const elapsed = Math.max(0, Math.floor((now - saved.startTime) / 1000));
+            setMode('stopwatch');
+            setElapsedSeconds(elapsed);
+            stopwatchStartTimeRef.current = saved.startTime;
+            setIsRunning(true);
+            if (saved.selectedModuleId) setSelectedModuleId(saved.selectedModuleId);
+            if (saved.topicName) setTopicName(saved.topicName);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to restore running timer state:', e);
+    }
+  }, [triggerCompletionPrompt]);
 
   // Sync selected module if modules change
   useEffect(() => {
@@ -50,38 +121,128 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
     }
   }, [modules, selectedModuleId]);
 
-  // Timer interval
+  // Foreground tick interval (runs while screen is on)
   useEffect(() => {
-    let interval: any = null;
-    if (isRunning) {
-      interval = setInterval(() => {
-        if (mode === 'pomodoro') {
-          setSecondsLeft((prev) => {
-            if (prev <= 1) {
-              clearInterval(interval);
-              setIsRunning(false);
-              triggerCompletionPrompt();
-              return 0;
-            }
-            return prev - 1;
-          });
-        } else {
-          setElapsedSeconds((prev) => prev + 1);
-        }
-      }, 1000);
-    }
+    if (!isRunning) return;
+    syncTimer();
+    const interval = setInterval(() => {
+      syncTimer();
+    }, 1000);
     return () => clearInterval(interval);
-  }, [isRunning, mode]);
+  }, [isRunning, syncTimer]);
+
+  // Screen off / on & App background / resume listeners
+  useEffect(() => {
+    const handleSync = () => {
+      if (isRunning) {
+        syncTimer();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleSync();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleSync);
+
+    let appStateHandle: any = null;
+    App.addListener('appStateChange', (state) => {
+      if (state.isActive) {
+        handleSync();
+      }
+    }).then((handle) => {
+      appStateHandle = handle;
+    }).catch(() => {});
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleSync);
+      if (appStateHandle && typeof appStateHandle.remove === 'function') {
+        appStateHandle.remove();
+      }
+    };
+  }, [isRunning, syncTimer]);
 
   const handleToggleTimer = () => {
     try {
       Haptics.impact({ style: ImpactStyle.Light });
     } catch {}
-    setIsRunning(!isRunning);
+
+    if (!isRunning) {
+      // STARTING TIMER
+      if (mode === 'pomodoro') {
+        const target = Date.now() + secondsLeft * 1000;
+        targetEndTimeRef.current = target;
+        NotificationService.schedulePomodoroAlert(target, currentModule?.name || 'Study Session');
+        localStorage.setItem(
+          'sf_timer_state',
+          JSON.stringify({
+            isRunning: true,
+            mode: 'pomodoro',
+            targetEndTime: target,
+            pomodoroTargetSeconds,
+            selectedModuleId,
+            topicName
+          })
+        );
+      } else {
+        const start = Date.now() - elapsedSeconds * 1000;
+        stopwatchStartTimeRef.current = start;
+        localStorage.setItem(
+          'sf_timer_state',
+          JSON.stringify({
+            isRunning: true,
+            mode: 'stopwatch',
+            startTime: start,
+            selectedModuleId,
+            topicName
+          })
+        );
+      }
+      setIsRunning(true);
+    } else {
+      // PAUSING TIMER
+      setIsRunning(false);
+      if (mode === 'pomodoro') {
+        if (targetEndTimeRef.current) {
+          const remaining = Math.max(0, Math.round((targetEndTimeRef.current - Date.now()) / 1000));
+          setSecondsLeft(remaining);
+        }
+        targetEndTimeRef.current = null;
+        NotificationService.cancelPomodoroAlert();
+      } else {
+        if (stopwatchStartTimeRef.current) {
+          const elapsed = Math.max(0, Math.floor((Date.now() - stopwatchStartTimeRef.current) / 1000));
+          setElapsedSeconds(elapsed);
+        }
+        stopwatchStartTimeRef.current = null;
+      }
+      localStorage.removeItem('sf_timer_state');
+    }
+  };
+
+  const handleToggleMode = () => {
+    if (isRunning) {
+      setIsRunning(false);
+      targetEndTimeRef.current = null;
+      stopwatchStartTimeRef.current = null;
+      NotificationService.cancelPomodoroAlert();
+      localStorage.removeItem('sf_timer_state');
+    }
+    setMode((prev) => (prev === 'pomodoro' ? 'stopwatch' : 'pomodoro'));
   };
 
   const handleStopAndLog = () => {
-    if (isRunning) setIsRunning(false);
+    if (isRunning) {
+      setIsRunning(false);
+      targetEndTimeRef.current = null;
+      stopwatchStartTimeRef.current = null;
+      NotificationService.cancelPomodoroAlert();
+      localStorage.removeItem('sf_timer_state');
+    }
     triggerCompletionPrompt();
   };
 
@@ -92,7 +253,6 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
   };
 
   const currentDisplayTime = mode === 'pomodoro' ? formatTime(secondsLeft) : formatTime(elapsedSeconds);
-  const currentModule = modules.find((m) => m.id === selectedModuleId) || modules[0];
 
   const handleSaveSession = async () => {
     setIsEvaluating(true);
@@ -145,6 +305,11 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
     } catch {}
 
     // Reset timer
+    setIsRunning(false);
+    targetEndTimeRef.current = null;
+    stopwatchStartTimeRef.current = null;
+    NotificationService.cancelPomodoroAlert();
+    localStorage.removeItem('sf_timer_state');
     setSecondsLeft(pomodoroTargetSeconds);
     setElapsedSeconds(0);
     setSessionNotes('');
@@ -154,9 +319,27 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
 
   const handleAdjustTime = (deltaMinutes: number) => {
     if (mode === 'pomodoro') {
-      const next = Math.max(60, pomodoroTargetSeconds + deltaMinutes * 60);
-      setPomodoroTargetSeconds(next);
-      setSecondsLeft(next);
+      const nextTarget = Math.max(60, pomodoroTargetSeconds + deltaMinutes * 60);
+      const nextLeft = Math.max(0, secondsLeft + deltaMinutes * 60);
+      setPomodoroTargetSeconds(nextTarget);
+      setSecondsLeft(nextLeft);
+
+      if (isRunning) {
+        const newTarget = Date.now() + nextLeft * 1000;
+        targetEndTimeRef.current = newTarget;
+        NotificationService.schedulePomodoroAlert(newTarget, currentModule?.name || 'Study Session');
+        localStorage.setItem(
+          'sf_timer_state',
+          JSON.stringify({
+            isRunning: true,
+            mode: 'pomodoro',
+            targetEndTime: newTarget,
+            pomodoroTargetSeconds: nextTarget,
+            selectedModuleId,
+            topicName
+          })
+        );
+      }
     }
   };
 
@@ -219,7 +402,7 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
 
             {/* Center: Timer digits */}
             <button
-              onClick={() => setMode(mode === 'pomodoro' ? 'stopwatch' : 'pomodoro')}
+              onClick={handleToggleMode}
               title="Tap to toggle Pomodoro / Stopwatch"
               className="flex items-center gap-1 font-mono text-base font-black tracking-widest text-slate-100 hover:text-rose-400 transition-colors"
             >

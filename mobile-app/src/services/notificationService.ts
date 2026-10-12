@@ -96,5 +96,37 @@ export const NotificationService = {
       '🧠 Morning Spaced-Revision Due',
       `4 high-yield topics are due for spaced-repetition in ${examName}. Review them now for maximum retention!`
     );
+  },
+
+  async schedulePomodoroAlert(targetTimeMs: number, moduleName: string): Promise<void> {
+    try {
+      await this.init();
+      await LocalNotifications.cancel({ notifications: [{ id: 105 }] });
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            id: 105,
+            title: '⏰ Pomodoro Session Complete!',
+            body: `Great focus sprint on ${moduleName}! Open StudyForge to review your notes & claim your XP.`,
+            schedule: {
+              at: new Date(targetTimeMs),
+              allowWhileIdle: true
+            },
+            sound: 'beep.wav',
+            extra: { type: 'pomodoro_complete' }
+          }
+        ]
+      });
+    } catch (e) {
+      console.warn('Failed to schedule pomodoro notification:', e);
+    }
+  },
+
+  async cancelPomodoroAlert(): Promise<void> {
+    try {
+      await LocalNotifications.cancel({ notifications: [{ id: 105 }] });
+    } catch (e) {
+      console.warn('Failed to cancel pomodoro notification:', e);
+    }
   }
 };
