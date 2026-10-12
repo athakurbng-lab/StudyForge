@@ -4,7 +4,7 @@ import { UserSettings, StorageService } from '../services/storageService';
 import { GeminiService } from '../services/geminiService';
 import { NotificationService } from '../services/notificationService';
 import { ApiService } from '../services/apiService';
-import { UpdateService, AppReleaseInfo } from '../services/updateService';
+import { UpdateService, AppReleaseInfo, CURRENT_BUILD_NUMBER } from '../services/updateService';
 import { UpdateModal } from './UpdateModal';
 import { UserProfileModal } from './UserProfileModal';
 
@@ -91,6 +91,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
   const [updateCheckMsg, setUpdateCheckMsg] = useState<string | null>(null);
   const [pendingRelease, setPendingRelease] = useState<AppReleaseInfo | null>(null);
+  const [availableRelease, setAvailableRelease] = useState<AppReleaseInfo | null>(null);
 
   const handleCheckUpdate = async () => {
     setIsCheckingUpdate(true);
@@ -99,11 +100,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       const res = await UpdateService.checkForUpdate(true);
       if (res.hasUpdate && res.release) {
         setPendingRelease(res.release);
+        setAvailableRelease(res.release);
         setUpdateCheckMsg(`New version available: v${res.release.version}`);
       } else if (res.error) {
         setUpdateCheckMsg(res.error);
       } else {
-        setUpdateCheckMsg(`You are running the latest version (v${settings.appVersion}).`);
+        setUpdateCheckMsg(`✓ App is up to date (${UpdateService.getCurrentVersion()})`);
+        if (res.release) {
+          setAvailableRelease(res.release);
+        }
       }
     } catch {
       setUpdateCheckMsg('Unable to check for updates right now.');
@@ -620,12 +625,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <div className="p-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
             <span className="text-[10px] text-slate-400 uppercase font-semibold">Version</span>
-            <div className="font-bold text-slate-800 dark:text-slate-200">{settings.appVersion}</div>
+            <div className="font-bold text-slate-800 dark:text-slate-200">{UpdateService.getCurrentVersion()}</div>
           </div>
 
           <div className="p-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
             <span className="text-[10px] text-slate-400 uppercase font-semibold">Build ID</span>
-            <div className="font-mono text-slate-800 dark:text-slate-200 text-[11px]">{settings.buildNumber}</div>
+            <div className="font-mono text-slate-800 dark:text-slate-200 text-[11px]">{CURRENT_BUILD_NUMBER}</div>
           </div>
 
           <div className="p-2 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
@@ -645,9 +650,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </button>
 
           {updateCheckMsg && (
-            <p className="text-[11px] text-center font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/80 p-2 rounded-lg">
-              {updateCheckMsg}
-            </p>
+            <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-center space-y-1.5">
+              <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                {updateCheckMsg}
+              </p>
+              {availableRelease && (
+                <button
+                  type="button"
+                  onClick={() => setPendingRelease(availableRelease)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>View Release Notes & Reinstall APK</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

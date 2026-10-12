@@ -372,7 +372,13 @@ export const StorageService = {
     };
     if (!saved) return defaults;
     try {
-      return { ...defaults, ...JSON.parse(saved) };
+      const parsed = JSON.parse(saved);
+      return { 
+        ...defaults, 
+        ...parsed, 
+        appVersion: defaults.appVersion, 
+        buildNumber: defaults.buildNumber 
+      };
     } catch {
       return defaults;
     }
