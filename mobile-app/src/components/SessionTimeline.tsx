@@ -1,11 +1,14 @@
 import React, { useState, useRef } from 'react';
-import { Clock, Sparkles, Trash2, AlertCircle } from 'lucide-react';
+import { Clock, Sparkles, Trash2, AlertCircle, Filter, RotateCcw } from 'lucide-react';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { StudySession } from '../services/storageService';
 
 interface SessionTimelineProps {
   sessions: StudySession[];
   showNotesOnly: boolean;
+  isFiltered?: boolean;
+  activeFilterDescription?: string;
+  onResetFilters?: () => void;
   onOpenLogSession?: () => void;
   onDeleteSession?: (sessionId: string) => void;
 }
@@ -13,6 +16,9 @@ interface SessionTimelineProps {
 export const SessionTimeline: React.FC<SessionTimelineProps> = ({
   sessions,
   showNotesOnly,
+  isFiltered = false,
+  activeFilterDescription,
+  onResetFilters,
   onOpenLogSession,
   onDeleteSession
 }) => {
@@ -75,6 +81,31 @@ export const SessionTimeline: React.FC<SessionTimelineProps> = ({
   };
 
   if (filteredSessions.length === 0) {
+    if (isFiltered) {
+      return (
+        <div className="p-8 text-center bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 space-y-3">
+          <Filter className="w-8 h-8 mx-auto text-rose-400 dark:text-rose-500" />
+          <div>
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+              No sessions match your active filters.
+            </p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+              {activeFilterDescription ? `Filtered by ${activeFilterDescription}.` : 'Try clearing filters or switching dates.'}
+            </p>
+          </div>
+          {onResetFilters && (
+            <button
+              onClick={onResetFilters}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all active:scale-95 border border-slate-200 dark:border-slate-700"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Active Filters</span>
+            </button>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className="p-8 text-center bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 space-y-3">
         <Clock className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600" />
@@ -106,6 +137,16 @@ export const SessionTimeline: React.FC<SessionTimelineProps> = ({
           <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
             Session Timeline ({filteredSessions.length})
           </h3>
+          {isFiltered && onResetFilters && (
+            <button
+              onClick={onResetFilters}
+              className="text-[10px] text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1 hover:underline"
+              title="Reset filter"
+            >
+              <span>{activeFilterDescription || 'Filtered'}</span>
+              <span>×</span>
+            </button>
+          )}
           <span className="text-[10px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full font-medium">
             Long-press to delete
           </span>

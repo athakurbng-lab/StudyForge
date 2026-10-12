@@ -18,6 +18,7 @@ import { AuthModal } from './components/AuthModal';
 import { LogSessionModal } from './components/LogSessionModal';
 import { BottomNav, NavTab } from './components/BottomNav';
 import { DailyGoalModal } from './components/DailyGoalModal';
+import { FilterModal } from './components/FilterModal';
 import { ApiService, AuthUser } from './services/apiService';
 
 StorageService.sanitizeStorage();
@@ -36,6 +37,12 @@ export const App: React.FC = () => {
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [isLogSessionOpen, setIsLogSessionOpen] = useState<boolean>(false);
   const [isDailyGoalOpen, setIsDailyGoalOpen] = useState<boolean>(false);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
+
+  // Filter States
+  const [selectedModuleFilter, setSelectedModuleFilter] = useState<string | null>(null);
+  const [selectedMoodFilter, setSelectedMoodFilter] = useState<string | null>(null);
+  const [dateFilterEnabled, setDateFilterEnabled] = useState<boolean>(true);
 
   // Date Navigation State - defaulted dynamically to today
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
@@ -171,6 +178,46 @@ export const App: React.FC = () => {
   const todayStr = new Date().toISOString().split('T')[0];
   const todayXp = sessions.filter(s => s.date === todayStr).reduce((sum, s) => sum + s.xpEarned, 0);
 
+  // Active Filter calculations
+  let activeFilterCount = 0;
+  if (selectedModuleFilter) activeFilterCount++;
+  if (selectedMoodFilter) activeFilterCount++;
+  if (showNotesOnly) activeFilterCount++;
+  if (!dateFilterEnabled) activeFilterCount++;
+
+  const handleResetFilters = () => {
+    setSelectedModuleFilter(null);
+    setSelectedMoodFilter(null);
+    setShowNotesOnly(false);
+    setDateFilterEnabled(true);
+  };
+
+  const getActiveFilterDesc = () => {
+    const parts: string[] = [];
+    if (selectedModuleFilter) {
+      const m = modules.find(mod => mod.id === selectedModuleFilter);
+      parts.push(m ? m.name : selectedModuleFilter);
+    }
+    if (selectedMoodFilter) {
+      parts.push(selectedMoodFilter);
+    }
+    if (showNotesOnly) parts.push('Notes Only');
+    if (!dateFilterEnabled) parts.push('All Dates');
+    return parts.join(' • ');
+  };
+
+  const timelineSessions = sessions.filter((s) => {
+    if (dateFilterEnabled && s.date !== selectedDate) return false;
+    if (showNotesOnly && (!s.notes || s.notes.trim().length === 0)) return false;
+    if (selectedModuleFilter) {
+      const matchId = s.moduleId === selectedModuleFilter;
+      const matchName = s.moduleName.toLowerCase() === selectedModuleFilter.toLowerCase();
+      if (!matchId && !matchName) return false;
+    }
+    if (selectedMoodFilter && s.mood !== selectedMoodFilter) return false;
+    return true;
+  });
+
   const formattedHeaderDate = () => {
     const d = new Date(selectedDate);
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -210,6 +257,9 @@ export const App: React.FC = () => {
               showNotesOnly={showNotesOnly}
               onToggleShowNotesOnly={() => setShowNotesOnly(!showNotesOnly)}
               filterLabel="Filter"
+              onOpenFilter={() => setIsFilterModalOpen(true)}
+              activeFilterCount={activeFilterCount}
+              onResetFilter={handleResetFilters}
             />
 
             {/* By Intention View matching Screenshot 1 */}
@@ -226,8 +276,11 @@ export const App: React.FC = () => {
 
             {/* Session Timeline matching Screenshot 2 */}
             <SessionTimeline
-              sessions={sessions}
+              sessions={timelineSessions}
               showNotesOnly={showNotesOnly}
+              isFiltered={activeFilterCount > 0}
+              activeFilterDescription={getActiveFilterDesc()}
+              onResetFilters={handleResetFilters}
               onOpenLogSession={() => setIsLogSessionOpen(true)}
               onDeleteSession={handleDeleteSession}
             />
@@ -312,6 +365,24 @@ export const App: React.FC = () => {
         currentGoal={dailyGoal}
         todayXp={todayXp}
         onSaveGoal={handleUpdateDailyGoal}
+      />
+
+      {/* Interactive Filter Modal */}
+      <FilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        modules={modules}
+        selectedModuleId={selectedModuleFilter}
+        onSelectModuleId={setSelectedModuleFilter}
+        selectedMood={selectedMoodFilter}
+        onSelectMood={setSelectedMoodFilter}
+        showNotesOnly={showNotesOnly}
+        onToggleShowNotesOnly={setShowNotesOnly}
+        dateFilterEnabled={dateFilterEnabled}
+        onToggleDateFilter={setDateFilterEnabled}
+        selectedDate={selectedDate}
+        onResetFilters={handleResetFilters}
+        activeFilterCount={activeFilterCount}
       />
     </div>
   );
