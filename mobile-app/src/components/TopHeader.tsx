@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Flame, Snowflake, Award, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Flame, Snowflake, Award, BookOpen, Target } from 'lucide-react';
 import { ExamType, EXAMS_DATA } from '../data/exams';
 import { AuthUser } from '../services/apiService';
 
@@ -11,6 +11,9 @@ interface TopHeaderProps {
   streak: number;
   freezeTokens: number;
   totalXp: number;
+  dailyGoal?: number;
+  todayXp?: number;
+  onOpenDailyGoal?: () => void;
   currentUser?: AuthUser | null;
   onOpenAuth?: () => void;
   onOpenLogSession?: () => void;
@@ -25,6 +28,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   streak,
   freezeTokens,
   totalXp,
+  dailyGoal = 50,
+  todayXp = 0,
+  onOpenDailyGoal,
   currentUser,
   onOpenAuth,
   onOpenLogSession
@@ -74,6 +80,21 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             <Award className="w-3.5 h-3.5 text-indigo-500" />
             <span>{totalXp.toLocaleString()}</span>
           </div>
+
+          {/* Daily XP Goal Pill */}
+          <button
+            type="button"
+            onClick={onOpenDailyGoal}
+            className={`flex items-center gap-1 px-2 py-1 border rounded-md text-xs font-bold active:scale-95 transition-all ${
+              todayXp >= dailyGoal
+                ? 'bg-emerald-100 dark:bg-emerald-950/80 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300'
+                : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400'
+            }`}
+            title="Daily XP Goal (Tap to set/edit)"
+          >
+            <Target className="w-3.5 h-3.5 text-emerald-500" />
+            <span>{todayXp}/{dailyGoal}</span>
+          </button>
 
           {/* + Log Session Action Button */}
           {onOpenLogSession && (

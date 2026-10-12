@@ -4,6 +4,7 @@ import { verifyAuthToken } from '@/app/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { DashboardChart } from './DashboardChart';
+import { DailyGoalWidget } from './DailyGoalWidget';
 
 export default async function DashboardPage() {
   const token = cookies().get('token')?.value;
@@ -67,18 +68,7 @@ export default async function DashboardPage() {
             <span>+ Log Study Session</span>
           </Link>
 
-          <div className="w-full sm:w-64 bg-black/20 rounded-xl p-4 border border-white/5">
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-slate-300">Daily Goal</span>
-              <span className="font-bold text-indigo-400">{todayXp} / {user!.dailyXpGoal} XP</span>
-            </div>
-            <div className="w-full bg-slate-800 rounded-full h-3">
-              <div 
-                className="bg-gradient-to-r from-indigo-500 to-cyan-400 h-3 rounded-full transition-all duration-1000"
-                style={{ width: `${progress}%` }}
-              ></div>
-            </div>
-          </div>
+          <DailyGoalWidget todayXp={todayXp} initialGoal={user!.dailyXpGoal} />
         </div>
       </section>
 

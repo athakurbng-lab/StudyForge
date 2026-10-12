@@ -10,6 +10,7 @@ export interface AuthUser {
   totalXP?: number;
   streak?: number;
   freezeTokens?: number;
+  dailyXpGoal?: number;
 }
 
 export interface GroupItem {
@@ -125,6 +126,9 @@ export const ApiService = {
       if (typeof data.user.freezeTokens === 'number') {
         StorageService.setFreezeTokens(data.user.freezeTokens);
       }
+      if (typeof data.user.dailyXpGoal === 'number') {
+        StorageService.setDailyXpGoal(data.user.dailyXpGoal);
+      }
 
       // Sync site sessions into device storage if available
       if (Array.isArray(data.user.sessions) && data.user.sessions.length > 0) {
@@ -195,6 +199,7 @@ export const ApiService = {
         if (typeof data.user.totalXP === 'number') StorageService.setTotalXp(data.user.totalXP);
         if (typeof data.user.streak === 'number') StorageService.setStreak(data.user.streak);
         if (typeof data.user.freezeTokens === 'number') StorageService.setFreezeTokens(data.user.freezeTokens);
+        if (typeof data.user.dailyXpGoal === 'number') StorageService.setDailyXpGoal(data.user.dailyXpGoal);
         if (Array.isArray(data.sessions)) {
           const mapped = this.mapCloudSessions(data.sessions);
           if (mapped.length > 0) {
@@ -207,6 +212,45 @@ export const ApiService = {
       console.warn('Background cloud sync error:', err);
     }
     return false;
+  },
+
+  // Delete a cloud session from the site database
+  async deleteCloudSession(sessionId: string): Promise<boolean> {
+    const token = StorageService.getAuthToken();
+    if (!token) return false;
+    try {
+      const res = await fetch(`${API_BASE}/api/sessions/${sessionId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      return res.ok;
+    } catch (err) {
+      console.warn('Delete cloud session failed:', err);
+      return false;
+    }
+  },
+
+  // Update daily XP goal on device and cloud
+  async updateDailyGoal(goal: number): Promise<boolean> {
+    StorageService.setDailyXpGoal(goal);
+    const token = StorageService.getAuthToken();
+    if (!token) return true; // Saved locally offline
+    try {
+      const res = await fetch(`${API_BASE}/api/user/goal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ dailyXpGoal: goal })
+      });
+      return res.ok;
+    } catch (err) {
+      console.warn('Cloud update daily goal failed:', err);
+      return false;
+    }
   },
 
   // Asynchronously upload a completed mobile session to the live website database

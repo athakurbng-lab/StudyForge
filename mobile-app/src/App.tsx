@@ -17,6 +17,7 @@ import { GroupsView } from './components/GroupsView';
 import { AuthModal } from './components/AuthModal';
 import { LogSessionModal } from './components/LogSessionModal';
 import { BottomNav, NavTab } from './components/BottomNav';
+import { DailyGoalModal } from './components/DailyGoalModal';
 import { ApiService, AuthUser } from './services/apiService';
 
 StorageService.sanitizeStorage();
@@ -29,10 +30,12 @@ export const App: React.FC = () => {
   const [streak, setStreak] = useState<number>(StorageService.getStreak());
   const [freezeTokens, setFreezeTokens] = useState<number>(StorageService.getFreezeTokens());
   const [totalXp, setTotalXp] = useState<number>(StorageService.getTotalXp());
+  const [dailyGoal, setDailyGoal] = useState<number>(() => StorageService.getDailyXpGoal());
   const [settings, setSettings] = useState<UserSettings>(StorageService.getSettings());
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(StorageService.getAuthUser());
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [isLogSessionOpen, setIsLogSessionOpen] = useState<boolean>(false);
+  const [isDailyGoalOpen, setIsDailyGoalOpen] = useState<boolean>(false);
 
   // Date Navigation State - defaulted dynamically to today
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
@@ -55,6 +58,7 @@ export const App: React.FC = () => {
           setTotalXp(StorageService.getTotalXp());
           setStreak(StorageService.getStreak());
           setFreezeTokens(StorageService.getFreezeTokens());
+          setDailyGoal(StorageService.getDailyXpGoal());
           setSessions(StorageService.getSessions());
         }
       });
@@ -108,7 +112,25 @@ export const App: React.FC = () => {
     setTotalXp(StorageService.getTotalXp());
     setStreak(StorageService.getStreak());
     setFreezeTokens(StorageService.getFreezeTokens());
+    setDailyGoal(StorageService.getDailyXpGoal());
     setSessions(StorageService.getSessions());
+  };
+
+  // Daily Goal update handler
+  const handleUpdateDailyGoal = async (newGoal: number) => {
+    StorageService.setDailyXpGoal(newGoal);
+    setDailyGoal(newGoal);
+    await ApiService.updateDailyGoal(newGoal);
+  };
+
+  // Delete session handler (long-press in SessionTimeline)
+  const handleDeleteSession = async (sessionId: string) => {
+    const res = StorageService.deleteSession(sessionId);
+    if (res.deleted) {
+      setSessions(StorageService.getSessions());
+      setTotalXp(StorageService.getTotalXp());
+      await ApiService.deleteCloudSession(sessionId);
+    }
   };
 
   // Session Completed handler
@@ -146,6 +168,9 @@ export const App: React.FC = () => {
 
   const weekStats = StorageService.getWeekStats(selectedDate);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayXp = sessions.filter(s => s.date === todayStr).reduce((sum, s) => sum + s.xpEarned, 0);
+
   const formattedHeaderDate = () => {
     const d = new Date(selectedDate);
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -165,6 +190,9 @@ export const App: React.FC = () => {
         streak={streak}
         freezeTokens={freezeTokens}
         totalXp={totalXp}
+        dailyGoal={dailyGoal}
+        todayXp={todayXp}
+        onOpenDailyGoal={() => setIsDailyGoalOpen(true)}
         currentUser={currentUser}
         onOpenAuth={() => setIsAuthOpen(true)}
         onOpenLogSession={() => setIsLogSessionOpen(true)}
@@ -201,6 +229,7 @@ export const App: React.FC = () => {
               sessions={sessions}
               showNotesOnly={showNotesOnly}
               onOpenLogSession={() => setIsLogSessionOpen(true)}
+              onDeleteSession={handleDeleteSession}
             />
           </div>
         )}
@@ -274,6 +303,15 @@ export const App: React.FC = () => {
         exam={activeExam}
         modules={modules}
         onSessionCompleted={handleSessionCompleted}
+      />
+
+      {/* Daily XP Goal Modal */}
+      <DailyGoalModal
+        isOpen={isDailyGoalOpen}
+        onClose={() => setIsDailyGoalOpen(false)}
+        currentGoal={dailyGoal}
+        todayXp={todayXp}
+        onSaveGoal={handleUpdateDailyGoal}
       />
     </div>
   );

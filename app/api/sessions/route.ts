@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     }
 
     const systemPrompt = `You are StudyForge AI, an expert exam preparation evaluator. 
-Your goal is to evaluate the user's NEW study session out of 100 XP based on its difficulty, intensity, and duration, comparing it to the provided baselines.
+Your goal is to evaluate the user's NEW study session out of 100 XP based strictly on the CONTENT, depth, difficulty, and complexity of concepts studied, comparing it to the provided baselines.
 CRITICAL LEARNING CURVE: You are also provided with the user's up to 4 previous sessions from today. It is completely normal for a user to study the same topic across multiple sessions (e.g. reading consecutive chapters). Do NOT penalize them just for staying on one subject. You should ONLY retroactively adjust or penalize XP if you detect obvious cheating, identical copy-pasted duplicates, or zero-effort spam. If the new session reveals they were actually working on a massive, highly difficult project, you can INCREASE their past XP.
 
 Return a raw JSON object (without markdown blocks) with the following structure:
@@ -194,6 +194,7 @@ export async function GET(request: Request) {
         totalXP: true,
         streak: true,
         freezeTokens: true,
+        dailyXpGoal: true,
         studySessions: {
           orderBy: { createdAt: 'desc' },
           take: 100
@@ -214,6 +215,7 @@ export async function GET(request: Request) {
         totalXP: user.totalXP,
         streak: user.streak,
         freezeTokens: user.freezeTokens,
+        dailyXpGoal: user.dailyXpGoal,
       },
       sessions: user.studySessions
     });

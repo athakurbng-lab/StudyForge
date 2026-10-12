@@ -45,6 +45,7 @@ const STORAGE_KEYS = {
   STREAK: 'studyforge_streak',
   FREEZE_TOKENS: 'studyforge_freeze_tokens',
   TOTAL_XP: 'studyforge_total_xp',
+  DAILY_XP_GOAL: 'studyforge_daily_xp_goal',
 };
 
 // Zero pre-filled sessions: clean slate for the user
@@ -235,6 +236,33 @@ export const StorageService = {
     // Update total XP
     const currentXp = this.getTotalXp();
     this.setTotalXp(currentXp + session.xpEarned);
+  },
+
+  deleteSession(sessionId: string): { deleted: boolean; xpDeducted: number } {
+    const list = this.getSessions();
+    const target = list.find(s => s.id === sessionId);
+    if (!target) return { deleted: false, xpDeducted: 0 };
+
+    const updated = list.filter(s => s.id !== sessionId);
+    localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(updated));
+
+    const xpDeducted = target.xpEarned || 0;
+    if (xpDeducted > 0) {
+      const currentXp = this.getTotalXp();
+      this.setTotalXp(Math.max(0, currentXp - xpDeducted));
+    }
+    return { deleted: true, xpDeducted };
+  },
+
+  getDailyXpGoal(): number {
+    const saved = localStorage.getItem(STORAGE_KEYS.DAILY_XP_GOAL);
+    const parsed = saved ? parseInt(saved, 10) : 50;
+    return isNaN(parsed) || parsed < 10 ? 50 : parsed;
+  },
+
+  setDailyXpGoal(goal: number): void {
+    const valid = Math.max(10, Math.min(1000, goal));
+    localStorage.setItem(STORAGE_KEYS.DAILY_XP_GOAL, valid.toString());
   },
 
   // Stats & Week Strip

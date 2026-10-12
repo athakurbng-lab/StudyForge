@@ -60,6 +60,7 @@ export async function POST(request: Request) {
         totalXP: user.totalXP,
         streak: user.streak,
         freezeTokens: user.freezeTokens,
+        dailyXpGoal: user.dailyXpGoal,
         sessions: user.studySessions
       }
     });
