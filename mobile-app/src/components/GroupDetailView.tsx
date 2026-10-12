@@ -18,6 +18,7 @@ import {
   GroupChatMessage, 
   AuthUser 
 } from '../services/apiService';
+import { StorageService } from '../services/storageService';
 
 interface GroupDetailViewProps {
   groupId: string;
@@ -32,14 +33,27 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   onBack,
   onOpenAuth
 }) => {
-  const [group, setGroup] = useState<GroupDetailItem | null>(null);
-  const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState<'daily' | 'weekly' | 'monthly' | 'all-time'>('all-time');
   const [activeTab, setActiveTab] = useState<'leaderboard' | 'chat'>('leaderboard');
+
+  const [group, setGroup] = useState<GroupDetailItem | null>(() => {
+    const cached = StorageService.getCachedGroupDetail(groupId, 'all-time');
+    return cached?.group || null;
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    const cached = StorageService.getCachedGroupDetail(groupId, 'all-time');
+    return !cached?.group;
+  });
   
   // Chat state
-  const [messages, setMessages] = useState<GroupChatMessage[]>([]);
-  const [loadingChat, setLoadingChat] = useState(false);
+  const [messages, setMessages] = useState<GroupChatMessage[]>(() => {
+    const cached = StorageService.getCachedGroupChat(groupId);
+    return cached?.messages || [];
+  });
+  const [loadingChat, setLoadingChat] = useState<boolean>(() => {
+    const cached = StorageService.getCachedGroupChat(groupId);
+    return !cached?.messages?.length;
+  });
   const [messageInput, setMessageInput] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
 
@@ -48,25 +62,42 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchDetail();
+    // When timeframe changes, check if we have it cached for this timeframe first
+    const cached = StorageService.getCachedGroupDetail(groupId, timeframe);
+    if (cached?.group) {
+      setGroup(cached.group);
+      setLoading(false);
+    }
+    fetchDetail(false);
   }, [groupId, timeframe]);
 
   useEffect(() => {
     if (activeTab === 'chat') {
-      fetchChat();
+      const cached = StorageService.getCachedGroupChat(groupId);
+      if (cached?.messages?.length) {
+        setMessages(cached.messages);
+        setLoadingChat(false);
+      }
+      fetchChat(false);
     }
   }, [groupId, activeTab]);
 
-  const fetchDetail = async () => {
-    setLoading(true);
-    const data = await ApiService.getGroupDetail(groupId, timeframe);
-    setGroup(data);
+  const fetchDetail = async (force = false) => {
+    const cached = StorageService.getCachedGroupDetail(groupId, timeframe);
+    if (!cached?.group) {
+      setLoading(true);
+    }
+    const data = await ApiService.getGroupDetail(groupId, timeframe, force);
+    if (data) setGroup(data);
     setLoading(false);
   };
 
-  const fetchChat = async () => {
-    setLoadingChat(true);
-    const msgs = await ApiService.getGroupChat(groupId);
+  const fetchChat = async (force = false) => {
+    const cached = StorageService.getCachedGroupChat(groupId);
+    if (!cached?.messages?.length) {
+      setLoadingChat(true);
+    }
+    const msgs = await ApiService.getGroupChat(groupId, force);
     setMessages(msgs);
     setLoadingChat(false);
   };
@@ -151,8 +182,8 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
 
         <button
           onClick={() => {
-            fetchDetail();
-            if (activeTab === 'chat') fetchChat();
+            fetchDetail(true);
+            if (activeTab === 'chat') fetchChat(true);
           }}
           className="p-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-xs"
           title="Refresh squad"

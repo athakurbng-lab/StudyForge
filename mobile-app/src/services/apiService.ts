@@ -224,19 +224,30 @@ export const ApiService = {
     }
   },
 
-  async getGroups(): Promise<GroupItem[]> {
+  async getGroups(forceRefresh = false): Promise<GroupItem[]> {
+    const cached = StorageService.getCachedGroups();
+    const token = StorageService.getAuthToken();
+    const user = StorageService.getAuthUser();
+
     try {
-      const token = StorageService.getAuthToken();
-      const user = StorageService.getAuthUser();
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const url = user?.id ? `${API_BASE}/api/groups?userId=${user.id}` : `${API_BASE}/api/groups`;
+      const clientHash = !forceRefresh && cached ? cached.hash : '';
+      const params = new URLSearchParams();
+      if (user?.id) params.set('userId', user.id);
+      if (clientHash) params.set('clientHash', clientHash);
+
+      const url = `${API_BASE}/api/groups${params.toString() ? `?${params.toString()}` : ''}`;
       const res = await fetch(url, { headers });
       if (res.ok) {
         const data = await res.json();
+        if (data.notModified && cached) {
+          return cached.groups;
+        }
+
         if (data.groups && Array.isArray(data.groups)) {
-          return data.groups.map((g: any) => ({
+          const mapped = data.groups.map((g: any) => ({
             id: g.id,
             name: g.name,
             description: g.description || '',
@@ -246,12 +257,18 @@ export const ApiService = {
             isMember: g.isMember || false,
             role: g.role || null
           }));
+
+          if (data.hash) {
+            StorageService.saveCachedGroups(mapped, data.hash);
+          }
+          return mapped;
         }
       }
     } catch (err) {
       console.warn('Live groups fetch fallback:', err);
     }
 
+    if (cached) return cached.groups;
     return [];
   },
 
@@ -320,41 +337,72 @@ export const ApiService = {
     }
   },
 
-  async getGroupDetail(groupId: string, timeframe: string = 'all-time'): Promise<GroupDetailItem | null> {
+  async getGroupDetail(groupId: string, timeframe: string = 'all-time', forceRefresh = false): Promise<GroupDetailItem | null> {
+    const cached = StorageService.getCachedGroupDetail(groupId, timeframe);
+
     try {
       const token = StorageService.getAuthToken();
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${API_BASE}/api/groups/${groupId}?timeframe=${timeframe}`, { headers });
+      const clientHash = !forceRefresh && cached ? cached.hash : '';
+      const params = new URLSearchParams({ timeframe });
+      if (clientHash) params.set('clientHash', clientHash);
+
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}?${params.toString()}`, { headers });
       if (res.ok) {
         const data = await res.json();
+        if (data.notModified && cached) {
+          return cached.group;
+        }
+
         if (data.success && data.group) {
+          if (data.hash) {
+            StorageService.saveCachedGroupDetail(groupId, timeframe, data.group, data.hash);
+          }
           return data.group;
         }
       }
     } catch (err) {
       console.warn('Failed to fetch group detail:', err);
     }
+
+    if (cached) return cached.group;
     return null;
   },
 
-  async getGroupChat(groupId: string): Promise<GroupChatMessage[]> {
+  async getGroupChat(groupId: string, forceRefresh = false): Promise<GroupChatMessage[]> {
+    const cached = StorageService.getCachedGroupChat(groupId);
+
     try {
       const token = StorageService.getAuthToken();
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${API_BASE}/api/groups/${groupId}/chat`, { headers });
+      const clientHash = !forceRefresh && cached ? cached.hash : '';
+      const url = clientHash 
+        ? `${API_BASE}/api/groups/${groupId}/chat?clientHash=${clientHash}`
+        : `${API_BASE}/api/groups/${groupId}/chat`;
+
+      const res = await fetch(url, { headers });
       if (res.ok) {
         const data = await res.json();
+        if (data.notModified && cached) {
+          return cached.messages;
+        }
+
         if (data.messages && Array.isArray(data.messages)) {
+          if (data.hash) {
+            StorageService.saveCachedGroupChat(groupId, data.messages, data.hash);
+          }
           return data.messages;
         }
       }
     } catch (err) {
       console.warn('Failed to fetch group chat:', err);
     }
+
+    if (cached) return cached.messages;
     return [];
   },
 

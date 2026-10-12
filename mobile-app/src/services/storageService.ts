@@ -306,5 +306,48 @@ export const StorageService = {
 
   saveSettings(settings: UserSettings): void {
     localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+  },
+
+  // Cached Groups & Squads with Hash comparison
+  getCachedGroups(): { groups: any[]; hash: string } | null {
+    const raw = localStorage.getItem('studyforge_cached_groups');
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  },
+
+  saveCachedGroups(groups: any[], hash: string): void {
+    localStorage.setItem('studyforge_cached_groups', JSON.stringify({ groups, hash, cachedAt: Date.now() }));
+  },
+
+  getCachedGroupDetail(groupId: string, timeframe: string): { group: any; hash: string } | null {
+    const raw = localStorage.getItem(`studyforge_group_${groupId}_${timeframe}`);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  },
+
+  saveCachedGroupDetail(groupId: string, timeframe: string, group: any, hash: string): void {
+    localStorage.setItem(`studyforge_group_${groupId}_${timeframe}`, JSON.stringify({ group, hash, cachedAt: Date.now() }));
+  },
+
+  getCachedGroupChat(groupId: string): { messages: any[]; hash: string } | null {
+    const raw = localStorage.getItem(`studyforge_chat_${groupId}`);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  },
+
+  saveCachedGroupChat(groupId: string, messages: any[], hash: string): void {
+    localStorage.setItem(`studyforge_chat_${groupId}`, JSON.stringify({ messages, hash, cachedAt: Date.now() }));
   }
 };

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/app/lib/prisma';
 import { verifyAuthToken } from '@/app/lib/auth';
 import { cookies } from 'next/headers';
+import crypto from 'crypto';
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
@@ -31,7 +32,17 @@ export async function GET(request: Request, { params }: { params: { id: string }
       }
     });
 
-    return NextResponse.json({ messages });
+    const { searchParams } = new URL(request.url);
+    const clientHash = searchParams.get('clientHash') || request.headers.get('if-none-match')?.replace(/W\/"|"/g, '');
+
+    const hashData = `${messages.length}:${messages[0]?.id || 'none'}:${messages[0]?.createdAt || 'none'}`;
+    const hash = crypto.createHash('sha1').update(hashData).digest('hex');
+
+    if (clientHash && clientHash === hash) {
+      return NextResponse.json({ success: true, notModified: true, hash });
+    }
+
+    return NextResponse.json({ success: true, notModified: false, hash, messages });
   } catch (error) {
     console.error('Chat fetch error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

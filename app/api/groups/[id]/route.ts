@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/app/lib/prisma';
 import { verifyAuthToken } from '@/app/lib/auth';
 import { cookies } from 'next/headers';
+import crypto from 'crypto';
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
@@ -19,6 +20,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
     const { searchParams } = new URL(request.url);
     const timeframe = searchParams.get('timeframe') || 'all-time';
+    const clientHash = searchParams.get('clientHash') || request.headers.get('if-none-match')?.replace(/W\/"|"/g, '');
 
     let dateFilter: Date | undefined = undefined;
     const now = new Date();
@@ -88,21 +90,49 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
     formattedMembers.sort((a, b) => b.timeframeXP - a.timeframeXP);
 
-    return NextResponse.json({
-      success: true,
-      group: {
-        id: group.id,
-        name: group.name,
-        description: group.description || '',
-        inviteCode: group.inviteCode,
-        isPrivate: group.isPrivate,
-        createdAt: group.createdAt,
-        memberCount: group.members.length,
-        isMember,
-        myRole: currentUserMember ? currentUserMember.role : null,
-        members: formattedMembers
+    // Compute deterministic hash of squad + members + stats
+    const hashData = `${group.id}:${timeframe}:${group.name}:${group.members.length}:${formattedMembers.map(m => `${m.userId}:${m.timeframeXP}:${m.streak}`).join(',')}`;
+    const hash = crypto.createHash('sha1').update(hashData).digest('hex');
+
+    if (clientHash && clientHash === hash) {
+      return NextResponse.json(
+        { success: true, notModified: true, hash },
+        { 
+          status: 200, 
+          headers: { 
+            'ETag': `"${hash}"`,
+            'Cache-Control': 'public, max-age=10, stale-while-revalidate=60'
+          } 
+        }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        notModified: false,
+        hash,
+        group: {
+          id: group.id,
+          name: group.name,
+          description: group.description || '',
+          inviteCode: group.inviteCode,
+          isPrivate: group.isPrivate,
+          createdAt: group.createdAt,
+          memberCount: group.members.length,
+          isMember,
+          myRole: currentUserMember ? currentUserMember.role : null,
+          members: formattedMembers
+        }
+      },
+      { 
+        status: 200, 
+        headers: { 
+          'ETag': `"${hash}"`,
+          'Cache-Control': 'public, max-age=10, stale-while-revalidate=60'
+        } 
       }
-    });
+    );
   } catch (error) {
     console.error('Fetch group detail error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

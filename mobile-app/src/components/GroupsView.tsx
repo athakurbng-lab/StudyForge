@@ -9,6 +9,7 @@ import {
   ChevronRight 
 } from 'lucide-react';
 import { ApiService, GroupItem, AuthUser } from '../services/apiService';
+import { StorageService } from '../services/storageService';
 import { GroupDetailView } from './GroupDetailView';
 
 interface GroupsViewProps {
@@ -20,8 +21,14 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
   currentUser,
   onOpenAuth
 }) => {
-  const [groups, setGroups] = useState<GroupItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [groups, setGroups] = useState<GroupItem[]>(() => {
+    const cached = StorageService.getCachedGroups();
+    return cached?.groups || [];
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    const cached = StorageService.getCachedGroups();
+    return !cached?.groups?.length;
+  });
   const [inviteCodeInput, setInviteCodeInput] = useState('');
   const [joinMsg, setJoinMsg] = useState<string | null>(null);
 
@@ -35,12 +42,16 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    loadGroups();
+    loadGroups(false);
   }, [currentUser]);
 
-  const loadGroups = async () => {
-    setLoading(true);
-    const list = await ApiService.getGroups();
+  const loadGroups = async (force = false) => {
+    // If we have cached groups already displayed, don't show full loading screen
+    const cached = StorageService.getCachedGroups();
+    if (!cached?.groups?.length) {
+      setLoading(true);
+    }
+    const list = await ApiService.getGroups(force);
     setGroups(list);
     setLoading(false);
   };
@@ -126,7 +137,7 @@ export const GroupsView: React.FC<GroupsViewProps> = ({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={loadGroups}
+            onClick={() => loadGroups(true)}
             title="Refresh squads from database"
             className="p-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-xs transition-colors"
           >

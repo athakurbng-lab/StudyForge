@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/app/lib/prisma';
 import { verifyAuthToken } from '@/app/lib/auth';
 import { cookies } from 'next/headers';
+import crypto from 'crypto';
 
 export async function GET(request: Request) {
   try {
@@ -26,6 +27,10 @@ export async function GET(request: Request) {
       userId = queryUserId;
     }
 
+    const clientHash = searchParams.get('clientHash') || request.headers.get('if-none-match')?.replace(/W\/"|"/g, '');
+
+    let mapped: any[] = [];
+
     if (userId) {
       const memberships = await prisma.groupMember.findMany({
         where: { userId },
@@ -47,7 +52,7 @@ export async function GET(request: Request) {
         orderBy: { createdAt: 'desc' }
       });
 
-      const mapped = groups.map(g => ({
+      mapped = groups.map(g => ({
         id: g.id,
         name: g.name,
         description: g.description || '',
@@ -58,33 +63,58 @@ export async function GET(request: Request) {
         role: roleMap.get(g.id) || null,
         createdAt: g.createdAt
       }));
+    } else {
+      // Unauthenticated / Public groups discovery
+      const groups = await prisma.group.findMany({
+        where: { isPrivate: false },
+        include: {
+          _count: { select: { members: true } }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50
+      });
 
-      return NextResponse.json({ success: true, groups: mapped });
+      mapped = groups.map(g => ({
+        id: g.id,
+        name: g.name,
+        description: g.description || '',
+        inviteCode: g.inviteCode,
+        isPrivate: g.isPrivate,
+        memberCount: g._count.members,
+        isMember: false,
+        role: null,
+        createdAt: g.createdAt
+      }));
     }
 
-    // Unauthenticated / Public groups discovery
-    const groups = await prisma.group.findMany({
-      where: { isPrivate: false },
-      include: {
-        _count: { select: { members: true } }
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 50
-    });
+    // Generate deterministic content hash
+    const hashData = mapped.map(g => `${g.id}:${g.memberCount}:${g.isMember}:${g.name}`).join('|');
+    const hash = crypto.createHash('sha1').update(hashData || 'empty').digest('hex');
 
-    const mapped = groups.map(g => ({
-      id: g.id,
-      name: g.name,
-      description: g.description || '',
-      inviteCode: g.inviteCode,
-      isPrivate: g.isPrivate,
-      memberCount: g._count.members,
-      isMember: false,
-      role: null,
-      createdAt: g.createdAt
-    }));
+    // Fast return if client already has the identical hash
+    if (clientHash && clientHash === hash) {
+      return NextResponse.json(
+        { success: true, notModified: true, hash },
+        { 
+          status: 200, 
+          headers: { 
+            'ETag': `"${hash}"`,
+            'Cache-Control': 'public, max-age=10, stale-while-revalidate=60'
+          } 
+        }
+      );
+    }
 
-    return NextResponse.json({ success: true, groups: mapped });
+    return NextResponse.json(
+      { success: true, notModified: false, hash, groups: mapped },
+      { 
+        status: 200, 
+        headers: { 
+          'ETag': `"${hash}"`,
+          'Cache-Control': 'public, max-age=10, stale-while-revalidate=60'
+        } 
+      }
+    );
   } catch (error) {
     console.error('Fetch groups error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
