@@ -13,7 +13,13 @@ export async function POST(request: Request) {
 
     const user = await prisma.user.findUnique({
       where: { username },
-      include: { challengeToken: true }
+      include: { 
+        challengeToken: true,
+        studySessions: {
+          orderBy: { createdAt: 'desc' },
+          take: 100
+        }
+      }
     });
 
     if (!user) {
@@ -45,11 +51,16 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json({ 
       success: true,
+      token,
       user: {
         id: user.id,
         username: user.username,
         displayName: user.displayName,
-        onboardingDone: user.onboardingDone
+        onboardingDone: user.onboardingDone,
+        totalXP: user.totalXP,
+        streak: user.streak,
+        freezeTokens: user.freezeTokens,
+        sessions: user.studySessions
       }
     });
 

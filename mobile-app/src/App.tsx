@@ -16,7 +16,7 @@ import { SettingsView } from './components/SettingsView';
 import { GroupsView } from './components/GroupsView';
 import { AuthModal } from './components/AuthModal';
 import { BottomNav, NavTab } from './components/BottomNav';
-import { AuthUser } from './services/apiService';
+import { ApiService, AuthUser } from './services/apiService';
 
 StorageService.sanitizeStorage();
 
@@ -45,6 +45,18 @@ export const App: React.FC = () => {
   // Load sessions and initialize notifications on mount
   useEffect(() => {
     setSessions(StorageService.getSessions());
+
+    // Auto-sync with live cloud database if user is logged in
+    if (currentUser) {
+      ApiService.syncWithCloud().then((synced: boolean) => {
+        if (synced) {
+          setTotalXp(StorageService.getTotalXp());
+          setStreak(StorageService.getStreak());
+          setFreezeTokens(StorageService.getFreezeTokens());
+          setSessions(StorageService.getSessions());
+        }
+      });
+    }
 
     // Initialize smart notifications
     NotificationService.init().then(() => {
@@ -88,6 +100,15 @@ export const App: React.FC = () => {
     setModules(StorageService.getModulesForExam(activeExam));
   };
 
+  // Auth User Change handler (syncs UI state immediately upon login/logout)
+  const handleUserChanged = (user: AuthUser | null) => {
+    setCurrentUser(user);
+    setTotalXp(StorageService.getTotalXp());
+    setStreak(StorageService.getStreak());
+    setFreezeTokens(StorageService.getFreezeTokens());
+    setSessions(StorageService.getSessions());
+  };
+
   // Session Completed handler
   const handleSessionCompleted = (newSession: StudySession) => {
     StorageService.addSession(newSession);
@@ -95,6 +116,9 @@ export const App: React.FC = () => {
     setTotalXp(StorageService.getTotalXp());
     setStreak(StorageService.getStreak());
     setFreezeTokens(StorageService.getFreezeTokens());
+
+    // Asynchronously sync session to live cloud database
+    ApiService.syncSessionToCloud(newSession);
   };
 
   // Settings update handler
@@ -235,7 +259,7 @@ export const App: React.FC = () => {
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         currentUser={currentUser}
-        onUserChanged={setCurrentUser}
+        onUserChanged={handleUserChanged}
       />
     </div>
   );

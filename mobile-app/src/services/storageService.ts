@@ -162,7 +162,7 @@ export const StorageService = {
     localStorage.removeItem(`${STORAGE_KEYS.DELETED_MODULES}_${exam}`);
   },
 
-  // Auth User
+  // Auth User & Token
   getAuthUser(): { id: string; username: string; displayName?: string } | null {
     const saved = localStorage.getItem('studyforge_auth_user');
     return saved ? JSON.parse(saved) : null;
@@ -172,11 +172,24 @@ export const StorageService = {
     localStorage.setItem('studyforge_auth_user', JSON.stringify(user));
   },
 
+  getAuthToken(): string | null {
+    return localStorage.getItem('studyforge_auth_token');
+  },
+
+  saveAuthToken(token: string): void {
+    localStorage.setItem('studyforge_auth_token', token);
+  },
+
   clearAuthUser(): void {
     localStorage.removeItem('studyforge_auth_user');
+    localStorage.removeItem('studyforge_auth_token');
   },
 
   // Sessions
+  saveSessions(sessions: StudySession[]): void {
+    localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions));
+  },
+
   getSessions(): StudySession[] {
     const saved = localStorage.getItem(STORAGE_KEYS.SESSIONS);
     if (!saved) return [];

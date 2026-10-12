@@ -6,7 +6,11 @@ import { processSessionStreakAndBadges } from '@/app/lib/streak';
 
 export async function POST(request: Request) {
   try {
-    const token = cookies().get('token')?.value;
+    let token = cookies().get('token')?.value;
+    const authHeader = request.headers.get('authorization');
+    if (!token && authHeader?.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     
     const payload = await verifyAuthToken(token);
@@ -156,3 +160,66 @@ ${pastContext}`;
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const userIdParam = url.searchParams.get('userId');
+    const authHeader = request.headers.get('authorization');
+    let userId = userIdParam;
+
+    if (!userId && authHeader?.startsWith('Bearer ')) {
+      const payload = await verifyAuthToken(authHeader.substring(7));
+      if (payload) userId = payload.userId as string;
+    }
+
+    if (!userId) {
+      const token = cookies().get('token')?.value;
+      if (token) {
+        const payload = await verifyAuthToken(token);
+        if (payload) userId = payload.userId as string;
+      }
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized. Provide token or userId.' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        totalXP: true,
+        streak: true,
+        freezeTokens: true,
+        studySessions: {
+          orderBy: { createdAt: 'desc' },
+          take: 100
+        }
+      }
+    });
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        totalXP: user.totalXP,
+        streak: user.streak,
+        freezeTokens: user.freezeTokens,
+      },
+      sessions: user.studySessions
+    });
+  } catch (error) {
+    console.error('Fetch sessions error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+

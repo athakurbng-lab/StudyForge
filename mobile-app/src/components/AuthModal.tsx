@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User, Lock, Sparkles, LogIn, UserPlus, LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, User, Lock, Sparkles, LogIn, UserPlus, LogOut, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { ApiService, AuthUser } from '../services/apiService';
 import { StorageService } from '../services/storageService';
 
@@ -97,9 +97,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <p className="text-xs text-emerald-500 font-semibold">{successMsg}</p>
             )}
 
+            {error && (
+              <p className="text-xs text-rose-500 font-semibold">{error}</p>
+            )}
+
+            <button
+              type="button"
+              onClick={async () => {
+                setLoading(true);
+                setError(null);
+                const ok = await ApiService.syncWithCloud();
+                setLoading(false);
+                if (ok) {
+                  onUserChanged(currentUser);
+                  setSuccessMsg('Synchronized latest data from site database!');
+                } else {
+                  setError('Failed to sync. Check network connection.');
+                }
+              }}
+              disabled={loading}
+              className="w-full py-2.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-indigo-100 transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span>{loading ? 'Syncing...' : 'Sync Now with Live Database'}</span>
+            </button>
+
             <button
               onClick={handleLogout}
-              className="w-full py-2.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2"
+              className="w-full py-2.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-rose-100 transition-colors"
             >
               <LogOut className="w-4 h-4" />
               <span>Sign Out of Account</span>
