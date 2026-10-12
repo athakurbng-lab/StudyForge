@@ -51,7 +51,12 @@ export async function POST(request: Request) {
       };
     } else {
       // 2. Call Gemini API with Key Cycling
-      const geminiKeys = process.env.GEMINI_KEYS?.split(',').map(k => k.trim()).filter(Boolean) || [];
+      const geminiKeys = (process.env.GEMINI_KEYS?.split(',') || [])
+        .map(k => {
+          const t = k.trim();
+          return (t.startsWith('Ab8') && !t.startsWith('AQ.')) ? `AQ.${t}` : t;
+        })
+        .filter(Boolean);
 
       if (geminiKeys.length > 0) {
         const systemPrompt = `You are StudyForge AI, an expert exam preparation evaluator. 

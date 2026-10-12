@@ -12,13 +12,21 @@ export interface SessionEvaluationResult {
   usedFallback: boolean;
 }
 
+function normalizeGeminiKey(rawKey: string): string {
+  const trimmed = rawKey.trim();
+  if (trimmed.startsWith('Ab8') && !trimmed.startsWith('AQ.')) {
+    return `AQ.${trimmed}`;
+  }
+  return trimmed;
+}
+
 export const GeminiService = {
   getKeys(): string[] {
     const settings = StorageService.getSettings();
     if (settings.geminiApiKey && settings.geminiApiKey.trim()) {
       const customKeys = settings.geminiApiKey
         .split(/[,\n]/)
-        .map(k => k.trim())
+        .map(k => normalizeGeminiKey(k))
         .filter(k => k.length > 10);
       if (customKeys.length > 0) return customKeys;
     }
@@ -34,7 +42,8 @@ export const GeminiService = {
   },
 
   async testConnection(customKey?: string): Promise<{ success: boolean; message: string; model?: string }> {
-    const keyToTest = customKey?.trim() || this.getNextKey();
+    const rawKey = customKey?.trim() || this.getNextKey();
+    const keyToTest = normalizeGeminiKey(rawKey);
     if (!keyToTest) {
       return { success: false, message: 'No API key provided.' };
     }
