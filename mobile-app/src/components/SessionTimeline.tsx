@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Clock, Sparkles, Trash2, AlertCircle, Filter, RotateCcw } from 'lucide-react';
+import { Clock, Sparkles, Trash2, AlertCircle, AlertTriangle, Filter, RotateCcw } from 'lucide-react';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { StudySession } from '../services/storageService';
 
@@ -224,15 +224,32 @@ export const SessionTimeline: React.FC<SessionTimelineProps> = ({
                 {/* Expanded AI Evaluation Drawer */}
                 {isExpanded && (
                   <div className="mt-3 pt-2.5 border-t border-slate-200 dark:border-slate-700/80 animate-in fade-in duration-200 space-y-2.5">
-                    <div className="bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 rounded-lg p-2.5 text-xs">
-                      <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-300 font-bold mb-1 text-[11px]">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>Gemini 2.5 Flash Evaluation</span>
+                    {session.usedFallback || (session.aiFeedback && session.aiFeedback.includes('Live AI')) ? (
+                      <div className="bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-3 text-xs space-y-2">
+                        <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-bold text-[11px]">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                          <span>Gemini API Key Notice: Offline Logic Used</span>
+                        </div>
+                        {session.apiError && (
+                          <div className="text-[10px] font-medium text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 p-2 rounded-lg border border-rose-200 dark:border-rose-900/50">
+                            <span className="font-bold">Failure Reason:</span> {session.apiError}
+                          </div>
+                        )}
+                        <p className="text-[11px] text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-line">
+                          {session.aiFeedback}
+                        </p>
                       </div>
-                      <p className="text-[11px] text-slate-700 dark:text-slate-200 leading-relaxed">
-                        {session.aiFeedback || 'High retention observed. Concepts synthesized effectively with solid focus stamina.'}
-                      </p>
-                    </div>
+                    ) : (
+                      <div className="bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 rounded-lg p-2.5 text-xs">
+                        <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-300 font-bold mb-1 text-[11px]">
+                          <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Gemini 2.5 Flash Evaluation</span>
+                        </div>
+                        <p className="text-[11px] text-slate-700 dark:text-slate-200 leading-relaxed">
+                          {session.aiFeedback || 'High retention observed. Concepts synthesized effectively with solid focus stamina.'}
+                        </p>
+                      </div>
+                    )}
 
                     {/* Delete action button in drawer */}
                     {onDeleteSession && (

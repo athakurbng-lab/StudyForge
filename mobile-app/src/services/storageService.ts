@@ -17,6 +17,8 @@ export interface StudySession {
   aiFeedback?: string;
   date: string; // YYYY-MM-DD
   category: string;
+  apiError?: string;
+  usedFallback?: boolean;
 }
 
 export interface DayStats {

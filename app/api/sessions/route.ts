@@ -76,6 +76,7 @@ ${baselineText}
 ${pastContext}`;
 
         // Cycle through available keys
+        let lastAiError = '';
         for (let i = 0; i < geminiKeys.length; i++) {
           const apiKey = geminiKeys[i].trim();
           try {
@@ -99,18 +100,43 @@ ${pastContext}`;
                 evaluation = JSON.parse(aiText);
                 break; // Success! Exit the loop.
               }
-            } else if (aiResponse.status === 429) {
-              console.warn(`Key ${i} exhausted. Trying next key...`);
-              continue;
+            } else {
+              lastAiError = `HTTP ${aiResponse.status} ${aiResponse.statusText}`;
+              if (aiResponse.status === 429) {
+                console.warn(`Key ${i} exhausted. Trying next key...`);
+                continue;
+              }
             }
-          } catch (err) {
+          } catch (err: any) {
+            lastAiError = err.message || 'Network connection failed';
             console.warn(`Gemini key index ${i} evaluation error:`, err);
           }
         }
-      }
 
-      // 3. Resilient heuristic fallback if keys are exhausted, rate-limited, or blocked
-      if (!evaluation) {
+        // 3. Resilient heuristic fallback if keys are exhausted, rate-limited, or blocked
+        if (!evaluation) {
+          const failureReason = lastAiError || (geminiKeys.length === 0 ? 'No Gemini API keys configured on server' : 'All server API keys exhausted or rate-limited');
+          console.warn(`[StudyForge Backend] Live AI key evaluation failed: ${failureReason}. Switching to Offline Heuristic Engine.`);
+
+          const noteLen = (rawText || '').trim().length;
+          let heuristicXp = 50;
+          if (noteLen > 150) heuristicXp = 85;
+          else if (noteLen > 60) heuristicXp = 75;
+          else if (noteLen > 20) heuristicXp = 60;
+
+          evaluation = {
+            xpAwarded: heuristicXp,
+            aiBreakdown: `[⚠️ Live AI API Key Failed: ${failureReason} • Evaluated via Offline Academic Heuristics]\n\nEvaluated out of 100 XP based on study sprint depth and notes detail.`,
+            aiSuggestion: 'Continue consistent study sprints to compound conceptual retention. You can add a personal Gemini key in mobile Settings.',
+            closestBaseline: 1,
+            confidence: 0.9,
+            pastSessionUpdates: []
+          };
+        }
+      } else {
+        const failureReason = 'No server Gemini API keys configured';
+        console.warn(`[StudyForge Backend] ${failureReason}. Switching to Offline Heuristic Engine.`);
+
         const noteLen = (rawText || '').trim().length;
         let heuristicXp = 50;
         if (noteLen > 150) heuristicXp = 85;
@@ -119,8 +145,8 @@ ${pastContext}`;
 
         evaluation = {
           xpAwarded: heuristicXp,
-          aiBreakdown: 'Session evaluated using StudyForge Academic Heuristics.',
-          aiSuggestion: 'Continue consistent study sprints to compound conceptual retention.',
+          aiBreakdown: `[⚠️ Live AI API Key Failed: ${failureReason} • Evaluated via Offline Academic Heuristics]\n\nEvaluated out of 100 XP based on study sprint depth and notes detail.`,
+          aiSuggestion: 'Continue consistent study sprints to compound conceptual retention. You can add a personal Gemini key in mobile Settings.',
           closestBaseline: 1,
           confidence: 0.9,
           pastSessionUpdates: []

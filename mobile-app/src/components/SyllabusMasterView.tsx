@@ -113,7 +113,9 @@ export const SyllabusMasterView: React.FC<SyllabusMasterViewProps> = ({
       notes: studyNotes || `Completed syllabus unit: ${topic.name}`,
       aiFeedback: evalResult.feedback,
       date: now.toISOString().split('T')[0],
-      category: module.category
+      category: module.category,
+      apiError: evalResult.apiError,
+      usedFallback: evalResult.usedFallback
     };
 
     // Update local topic status in module

@@ -128,7 +128,9 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
       notes: sessionNotes,
       aiFeedback: evalResult.feedback,
       date: now.toISOString().split('T')[0],
-      category: currentModule?.category || 'General'
+      category: currentModule?.category || 'General',
+      apiError: evalResult.apiError,
+      usedFallback: evalResult.usedFallback
     };
 
     onSessionCompleted(newSession);

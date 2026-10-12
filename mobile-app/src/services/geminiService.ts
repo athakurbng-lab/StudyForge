@@ -8,6 +8,8 @@ export interface SessionEvaluationResult {
   difficultyScore: number; // 1-10
   feedback: string;
   keyUsed: string;
+  apiError?: string;
+  usedFallback: boolean;
 }
 
 export const GeminiService = {
@@ -77,7 +79,9 @@ export const GeminiService = {
     durationMinutes: number;
     notes: string;
   }): Promise<SessionEvaluationResult> {
-    const key = this.getNextKey();
+    const keys = this.getKeys();
+    let failureReason = '';
+
     const prompt = `You are the StudyForge AI Academic Evaluator for competitive exams (${params.exam}).
 Evaluate this student study session based strictly on the CONTENT, depth, difficulty, and conceptual coverage described:
 - Subject / Module: ${params.moduleName}
@@ -93,51 +97,82 @@ Provide a JSON response with:
 }
 Return ONLY valid JSON.`;
 
-    try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.3,
-            responseMimeType: 'application/json'
-          }
-        })
-      });
+    if (keys.length === 0) {
+      failureReason = 'No custom Gemini API key configured in Settings.';
+    } else {
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        try {
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                temperature: 0.3,
+                responseMimeType: 'application/json'
+              }
+            })
+          });
 
-      if (response.ok) {
-        const data = await response.json();
-        const jsonText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (jsonText) {
-          const parsed = JSON.parse(jsonText);
-          return {
-            xp: Math.max(35, Math.min(100, Number(parsed.xp) || 60)),
-            depthScore: Number(parsed.depthScore) || 8,
-            difficultyScore: Number(parsed.difficultyScore) || 7,
-            feedback: parsed.feedback || 'Great session! High retention achieved.',
-            keyUsed: `${key.slice(0, 8)}...`
-          };
+          if (response.ok) {
+            const data = await response.json();
+            const jsonText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (jsonText) {
+              const parsed = JSON.parse(jsonText);
+              return {
+                xp: Math.max(35, Math.min(100, Number(parsed.xp) || 60)),
+                depthScore: Number(parsed.depthScore) || 8,
+                difficultyScore: Number(parsed.difficultyScore) || 7,
+                feedback: parsed.feedback || 'Great session! High retention achieved.',
+                keyUsed: `${key.slice(0, 8)}...`,
+                usedFallback: false
+              };
+            }
+          } else {
+            let errorMsg = '';
+            try {
+              const errorData = await response.json();
+              errorMsg = errorData?.error?.message || '';
+            } catch {}
+
+            if (response.status === 400) {
+              failureReason = `API key invalid or expired (HTTP 400: ${errorMsg || 'Bad Request'})`;
+            } else if (response.status === 403) {
+              failureReason = `API key rejected by Google (HTTP 403: ${errorMsg || 'Permission Denied / Key flagged'})`;
+            } else if (response.status === 429) {
+              failureReason = `API quota or rate limit exceeded (HTTP 429: ${errorMsg || 'Resource Exhausted'})`;
+            } else {
+              failureReason = `API call failed (HTTP ${response.status}: ${errorMsg || response.statusText})`;
+            }
+          }
+        } catch (err: any) {
+          failureReason = `Network error / Offline (${err?.message || 'Check connection'})`;
         }
       }
-    } catch (err) {
-      console.warn('Gemini live evaluation failed, falling back to content-based heuristic:', err);
     }
 
-    // Content-based heuristic fallback if offline or rate limited
+    // Explicit notification before switching to offline logic
+    console.warn(`[StudyForge AI] Live Gemini API Key Failed: "${failureReason}". Switching to Offline Heuristic Logic.`);
+
+    // Content-based heuristic fallback
     const noteLen = (params.notes || '').trim().length;
     let contentXp = 50;
     if (noteLen > 150) contentXp = 85;
     else if (noteLen > 60) contentXp = 75;
     else if (noteLen > 20) contentXp = 60;
 
+    const feedback = `[⚠️ Live AI API Key Failed: ${failureReason} • Switched to Offline Engine]\n\nSolid focus session on ${params.moduleName}. Consistent effort compounds into mastery!`;
+
     return {
       xp: contentXp,
       depthScore: noteLen > 30 ? 8 : 7,
       difficultyScore: 7,
-      feedback: `Solid focus session on ${params.moduleName}. Consistent effort compounds into mastery!`,
-      keyUsed: 'StudyForge Heuristic Engine'
+      feedback,
+      keyUsed: 'Offline Heuristic Engine',
+      apiError: failureReason,
+      usedFallback: true
     };
   }
 };

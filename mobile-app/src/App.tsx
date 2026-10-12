@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StorageService, StudySession, UserSettings } from './services/storageService';
 import { ExamType, SubjectModule } from './data/exams';
 import { NotificationService } from './services/notificationService';
+import { AlertTriangle, X } from 'lucide-react';
 
 // Components
 import { TopHeader } from './components/TopHeader';
@@ -37,6 +38,7 @@ export const App: React.FC = () => {
   const [isLogSessionOpen, setIsLogSessionOpen] = useState<boolean>(false);
   const [isDailyGoalOpen, setIsDailyGoalOpen] = useState<boolean>(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
+  const [aiNotice, setAiNotice] = useState<{ message: string; details: string } | null>(null);
 
   // Filter States
   const [selectedModuleFilter, setSelectedModuleFilter] = useState<string | null>(null);
@@ -150,6 +152,15 @@ export const App: React.FC = () => {
     setStreak(StorageService.getStreak());
     setFreezeTokens(StorageService.getFreezeTokens());
 
+    // Explicitly notify user if Gemini API key failed before offline logic was used
+    if (newSession.usedFallback || (newSession.aiFeedback && newSession.aiFeedback.includes('Live AI API Key Failed'))) {
+      const errorMsg = newSession.apiError || 'Live Gemini API key rejected, quota exceeded, or offline.';
+      setAiNotice({
+        message: 'Gemini API Key Failed — Offline Engine Used',
+        details: errorMsg
+      });
+    }
+
     // Asynchronously sync session to live cloud database
     ApiService.syncSessionToCloud(newSession);
   };
@@ -246,6 +257,49 @@ export const App: React.FC = () => {
         onOpenAuth={() => setIsAuthOpen(true)}
         onOpenLogSession={() => setIsLogSessionOpen(true)}
       />
+
+      {/* Explicit Floating Alert Banner when Gemini API Key Fails */}
+      {aiNotice && (
+        <div className="fixed top-3 left-3 right-3 z-50 max-w-lg mx-auto bg-amber-500 dark:bg-amber-600 text-white rounded-2xl p-3.5 shadow-2xl border border-amber-300 dark:border-amber-400 flex items-start justify-between gap-3 animate-in slide-in-from-top-4 duration-200">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-amber-100" />
+            <div className="space-y-1">
+              <h4 className="text-xs font-black tracking-wide flex items-center gap-1.5">
+                <span>{aiNotice.message}</span>
+              </h4>
+              <p className="text-[11px] text-amber-100 leading-snug">
+                {aiNotice.details}
+              </p>
+              <div className="pt-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('settings');
+                    setAiNotice(null);
+                  }}
+                  className="text-[10px] font-bold bg-white text-amber-800 px-2.5 py-1 rounded-lg shadow-xs hover:bg-amber-50 active:scale-95 transition-all"
+                >
+                  Configure / Paste Key in Settings →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAiNotice(null)}
+                  className="text-[10px] text-amber-100 hover:text-white underline cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAiNotice(null)}
+            className="p-1 rounded-lg hover:bg-white/20 text-white/80 hover:text-white shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto pb-safe-content">
