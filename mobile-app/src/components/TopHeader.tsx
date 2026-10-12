@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Flame, Snowflake, Award, BookOpen } from 'lucide-react';
 import { ExamType, EXAMS_DATA } from '../data/exams';
+import { AuthUser } from '../services/apiService';
 
 interface TopHeaderProps {
   currentDateText: string;
@@ -10,6 +11,8 @@ interface TopHeaderProps {
   streak: number;
   freezeTokens: number;
   totalXp: number;
+  currentUser?: AuthUser | null;
+  onOpenAuth?: () => void;
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
@@ -20,7 +23,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onSelectExam,
   streak,
   freezeTokens,
-  totalXp
+  totalXp,
+  currentUser,
+  onOpenAuth
 }) => {
   const currentExamConfig = EXAMS_DATA[activeExam];
 
@@ -67,6 +72,26 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             <Award className="w-3.5 h-3.5 text-indigo-500" />
             <span>{totalXp.toLocaleString()}</span>
           </div>
+
+          {/* Profile / Cloud Sync Button */}
+          {onOpenAuth && (
+            <button
+              type="button"
+              onClick={onOpenAuth}
+              className="p-1 rounded-md transition-transform active:scale-95"
+              title={currentUser ? `Logged in as ${currentUser.displayName || currentUser.username}` : 'Sign In to Cloud'}
+            >
+              {currentUser ? (
+                <div className="w-6 h-6 rounded-full bg-rose-600 text-white font-black text-[10px] flex items-center justify-center ring-2 ring-emerald-400">
+                  {(currentUser.displayName || currentUser.username).slice(0, 1).toUpperCase()}
+                </div>
+              ) : (
+                <div className="px-2 py-1 rounded-md bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[10px] font-bold">
+                  Login
+                </div>
+              )}
+            </button>
+          )}
         </div>
       </div>
 

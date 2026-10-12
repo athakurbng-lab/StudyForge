@@ -1,4 +1,4 @@
-import { ExamType, SubjectModule, EXAMS_DATA } from '../data/exams';
+import { ExamType, SubjectModule, TopicProgress, EXAMS_DATA } from '../data/exams';
 
 export interface StudySession {
   id: string;
@@ -184,7 +184,21 @@ export const StorageService = {
     const deletedIds: string[] = deletedJson ? JSON.parse(deletedJson) : [];
 
     const all = [...baseModules, ...customModules];
-    return all.filter(m => !deletedIds.includes(m.id));
+    return all
+      .filter(m => !deletedIds.includes(m.id))
+      .map(m => {
+        const extraTopicsKey = `custom_topics_${exam}_${m.id}`;
+        const extraTopicsJson = localStorage.getItem(extraTopicsKey);
+        if (extraTopicsJson) {
+          try {
+            const extraTopics: TopicProgress[] = JSON.parse(extraTopicsJson);
+            return { ...m, topics: [...m.topics, ...extraTopics] };
+          } catch {
+            return m;
+          }
+        }
+        return m;
+      });
   },
 
   addCustomModule(exam: ExamType, module: SubjectModule): void {
@@ -192,6 +206,23 @@ export const StorageService = {
     const customModules: SubjectModule[] = customJson ? JSON.parse(customJson) : [];
     customModules.push(module);
     localStorage.setItem(`${STORAGE_KEYS.CUSTOM_MODULES}_${exam}`, JSON.stringify(customModules));
+  },
+
+  addTopicToModule(exam: ExamType, moduleId: string, topic: TopicProgress): void {
+    const customJson = localStorage.getItem(`${STORAGE_KEYS.CUSTOM_MODULES}_${exam}`);
+    let customModules: SubjectModule[] = customJson ? JSON.parse(customJson) : [];
+    const customMod = customModules.find(m => m.id === moduleId);
+    if (customMod) {
+      customMod.topics.push(topic);
+      localStorage.setItem(`${STORAGE_KEYS.CUSTOM_MODULES}_${exam}`, JSON.stringify(customModules));
+      return;
+    }
+
+    const extraTopicsKey = `custom_topics_${exam}_${moduleId}`;
+    const extraTopicsJson = localStorage.getItem(extraTopicsKey);
+    const extraTopics: TopicProgress[] = extraTopicsJson ? JSON.parse(extraTopicsJson) : [];
+    extraTopics.push(topic);
+    localStorage.setItem(extraTopicsKey, JSON.stringify(extraTopics));
   },
 
   deleteModule(exam: ExamType, moduleId: string): void {
@@ -215,6 +246,20 @@ export const StorageService = {
   resetModulesForExam(exam: ExamType): void {
     localStorage.removeItem(`${STORAGE_KEYS.CUSTOM_MODULES}_${exam}`);
     localStorage.removeItem(`${STORAGE_KEYS.DELETED_MODULES}_${exam}`);
+  },
+
+  // Auth User
+  getAuthUser(): { id: string; username: string; displayName?: string } | null {
+    const saved = localStorage.getItem('studyforge_auth_user');
+    return saved ? JSON.parse(saved) : null;
+  },
+
+  saveAuthUser(user: { id: string; username: string; displayName?: string }): void {
+    localStorage.setItem('studyforge_auth_user', JSON.stringify(user));
+  },
+
+  clearAuthUser(): void {
+    localStorage.removeItem('studyforge_auth_user');
   },
 
   // Sessions

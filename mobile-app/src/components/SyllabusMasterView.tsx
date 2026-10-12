@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { SubjectModule, TopicProgress, ExamType, EXAMS_DATA } from '../data/exams';
 import { Plus, Trash2, CheckCircle2, Circle, Sparkles, BookOpen, ChevronDown, ChevronUp, Layers } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { StudySession } from '../services/storageService';
+import { StorageService, StudySession } from '../services/storageService';
 import { GeminiService } from '../services/geminiService';
 
 interface SyllabusMasterViewProps {
@@ -28,6 +28,8 @@ export const SyllabusMasterView: React.FC<SyllabusMasterViewProps> = ({
   const [studyingTopic, setStudyingTopic] = useState<{ module: SubjectModule; topic: TopicProgress } | null>(null);
   const [studyNotes, setStudyNotes] = useState('');
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [addingTopicModuleId, setAddingTopicModuleId] = useState<string | null>(null);
+  const [newTopicName, setNewTopicName] = useState('');
 
   const activeExamConfig = EXAMS_DATA[exam];
 
@@ -56,6 +58,24 @@ export const SyllabusMasterView: React.FC<SyllabusMasterViewProps> = ({
     setNewModuleName('');
     setShowAddModal(false);
     setExpandedModuleId(id);
+  };
+
+  const handleAddTopicToModule = (moduleId: string) => {
+    if (!newTopicName.trim()) return;
+    const newTopic: TopicProgress = {
+      id: `${moduleId}_t_${Date.now()}`,
+      name: newTopicName.trim(),
+      status: 'not_started',
+      confidence: 3,
+      pyqCount: 10
+    };
+    StorageService.addTopicToModule(exam, moduleId, newTopic);
+    const targetModule = modules.find(m => m.id === moduleId);
+    if (targetModule) {
+      targetModule.topics.push(newTopic);
+    }
+    setNewTopicName('');
+    setAddingTopicModuleId(null);
   };
 
   const handleCompleteTopicStudy = async () => {
@@ -227,6 +247,49 @@ export const SyllabusMasterView: React.FC<SyllabusMasterViewProps> = ({
                       </button>
                     </div>
                   ))}
+
+                  {/* Add Topic / Unit to this Module */}
+                  {addingTopicModuleId === module.id ? (
+                    <div className="p-3 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-800 rounded-xl space-y-2.5 animate-in fade-in duration-150">
+                      <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                        Add New Topic / Chapter to {module.name}
+                      </div>
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="e.g. Kinship Systems, Developmental Milestones..."
+                        value={newTopicName}
+                        onChange={(e) => setNewTopicName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleAddTopicToModule(module.id); }}
+                        className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-hidden text-slate-800 dark:text-slate-100"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setAddingTopicModuleId(null); setNewTopicName(''); }}
+                          className="flex-1 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-semibold"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAddTopicToModule(module.id)}
+                          className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs"
+                        >
+                          Save Topic
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => { setAddingTopicModuleId(module.id); setNewTopicName(''); }}
+                      className="w-full py-2 border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 rounded-xl text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Add Topic / Chapter to this Bar</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>

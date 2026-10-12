@@ -13,7 +13,10 @@ import { SyllabusMasterView } from './components/SyllabusMasterView';
 import { AnswerWritingStudio } from './components/AnswerWritingStudio';
 import { AnalyticsView } from './components/AnalyticsView';
 import { SettingsView } from './components/SettingsView';
+import { GroupsView } from './components/GroupsView';
+import { AuthModal } from './components/AuthModal';
 import { BottomNav, NavTab } from './components/BottomNav';
+import { AuthUser } from './services/apiService';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavTab>('timer');
@@ -24,6 +27,8 @@ export const App: React.FC = () => {
   const [freezeTokens, setFreezeTokens] = useState<number>(StorageService.getFreezeTokens());
   const [totalXp, setTotalXp] = useState<number>(StorageService.getTotalXp());
   const [settings, setSettings] = useState<UserSettings>(StorageService.getSettings());
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(StorageService.getAuthUser());
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
 
   // Date Navigation State
   const [selectedDate, setSelectedDate] = useState<string>('2026-10-07');
@@ -132,6 +137,8 @@ export const App: React.FC = () => {
         streak={streak}
         freezeTokens={freezeTokens}
         totalXp={totalXp}
+        currentUser={currentUser}
+        onOpenAuth={() => setIsAuthOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -155,8 +162,7 @@ export const App: React.FC = () => {
               sessions={sessions}
               onAddModule={handleAddModule}
               onDeleteModule={handleDeleteModule}
-              onQuickLogSession={(mod) => {
-                // Focus on floating timer or syllabus
+              onQuickLogSession={(_mod) => {
                 setActiveTab('syllabus');
               }}
             />
@@ -176,6 +182,13 @@ export const App: React.FC = () => {
             onAddModule={handleAddModule}
             onDeleteModule={handleDeleteModule}
             onSessionCompleted={handleSessionCompleted}
+          />
+        )}
+
+        {activeTab === 'groups' && (
+          <GroupsView
+            currentUser={currentUser}
+            onOpenAuth={() => setIsAuthOpen(true)}
           />
         )}
 
@@ -209,10 +222,18 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* 5-Tab Bottom Navigation Bar */}
+      {/* Bottom Navigation Bar */}
       <BottomNav
         activeTab={activeTab}
         onSelectTab={setActiveTab}
+      />
+
+      {/* Cloud Authentication Modal */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        currentUser={currentUser}
+        onUserChanged={setCurrentUser}
       />
     </div>
   );
