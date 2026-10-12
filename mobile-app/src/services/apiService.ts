@@ -60,23 +60,10 @@ export const ApiService = {
       const dateStr = createdDate.toISOString().split('T')[0];
       const timeStr = createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       
-      // Extract duration realistically from text or XP
-      let durationMinutes = 0;
-      if (typeof s.durationMinutes === 'number' && s.durationMinutes > 0) {
-        durationMinutes = s.durationMinutes;
-      } else if (s.rawText) {
-        const hrMatch = s.rawText.match(/(\d+(?:\.\d+)?)\s*(?:hr|hrs|hour|hours)/i);
-        const minMatch = s.rawText.match(/(\d+)\s*(?:min|mins|minute|minutes)/i);
-        if (hrMatch) {
-          durationMinutes = Math.round(parseFloat(hrMatch[1]) * 60);
-        } else if (minMatch) {
-          durationMinutes = parseInt(minMatch[1], 10);
-        }
-      }
-      if (!durationMinutes || durationMinutes <= 0) {
-        // Realistic duration based on XP awarded (average ~1.5 - 2 XP per minute), clamped 15-180m
-        durationMinutes = s.xpAwarded ? Math.min(180, Math.max(15, Math.round(s.xpAwarded / 1.8))) : 25;
-      }
+      // Flat 1 hour (60 min) for sessions without explicit hour/duration data
+      const durationMinutes = (typeof s.durationMinutes === 'number' && s.durationMinutes > 0 && s.durationMinutes <= 480)
+        ? s.durationMinutes
+        : 60;
 
       // Authentic mood: only retain if genuine rating exists, do not fabricate
       const genuineMood = (s.mood && ['focused', 'neutral', 'distracted'].includes(s.mood)) ? s.mood : undefined;

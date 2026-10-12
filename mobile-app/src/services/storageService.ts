@@ -51,17 +51,24 @@ const STORAGE_KEYS = {
 const DEFAULT_SESSIONS: StudySession[] = [];
 
 export const StorageService = {
-  // One-time startup sanitizer to ensure 0 mock or pre-filled data
+  // One-time startup sanitizer to ensure 0 mock or pre-filled data and normalize arbitrary hours to flat 1hr
   sanitizeStorage(): void {
-    const SANITIZER_KEY = 'studyforge_clean_v5';
+    const SANITIZER_KEY = 'studyforge_clean_v6';
     if (localStorage.getItem(SANITIZER_KEY) !== 'true') {
       const sessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
       if (sessions) {
         try {
           const list = JSON.parse(sessions);
           if (Array.isArray(list)) {
-            // Filter out any mock/template sessions from earlier test builds
-            const genuine = list.filter((s: any) => !/^sess-[1-9]$/.test(s.id));
+            // Filter out any mock/template sessions from earlier test builds and normalize durations to flat 60 min if unreasonable
+            const genuine = list
+              .filter((s: any) => !/^sess-[1-9]$/.test(s.id))
+              .map((s: any) => ({
+                ...s,
+                durationMinutes: (typeof s.durationMinutes === 'number' && s.durationMinutes > 0 && s.durationMinutes <= 480)
+                  ? s.durationMinutes
+                  : 60
+              }));
             if (genuine.length === 0) {
               localStorage.removeItem(STORAGE_KEYS.SESSIONS);
               localStorage.setItem(STORAGE_KEYS.TOTAL_XP, '0');
@@ -205,7 +212,14 @@ export const StorageService = {
     try {
       const list = JSON.parse(saved);
       if (Array.isArray(list)) {
-        return list.filter(s => !/^sess-[1-9]$/.test(s.id));
+        return list
+          .filter(s => !/^sess-[1-9]$/.test(s.id))
+          .map(s => ({
+            ...s,
+            durationMinutes: (typeof s.durationMinutes === 'number' && s.durationMinutes > 0 && s.durationMinutes <= 480)
+              ? s.durationMinutes
+              : 60
+          }));
       }
       return [];
     } catch {
