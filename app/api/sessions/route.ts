@@ -86,7 +86,7 @@ ${pastContext}`;
           orderBy: { updatedAt: 'desc' }
         });
         const orKey = freeKeyRecord?.key || process.env.OPENROUTER_KEY;
-        const modelToUse = freeKeyRecord?.model || 'nvidia/nemotron-3-ultra-550b-a55b';
+        const modelToUse = freeKeyRecord?.model || 'nvidia/nemotron-3-ultra-550b-a55b:free';
 
         if (orKey) {
           const orResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {

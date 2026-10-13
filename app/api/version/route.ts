@@ -17,7 +17,7 @@ export async function GET() {
     downloadUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.0.apk",
     githubUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.0.apk",
     fileSizeMb: 4.1,
-    sha256: "6ebc87b4e417e5bc7fda63bcbaa072e86dab7aa0f766076d5eacf3ded2566e92"
+    sha256: "cea5606346a2fb2d8e4059053ed84b9d486e67be86bc62e5ecc9abab2a6a24d8"
   };
 
   return NextResponse.json(versionData, {

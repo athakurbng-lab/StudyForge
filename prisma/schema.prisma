@@ -359,7 +359,7 @@ model FreeKey {
   id             String    @id @default(cuid())
   key            String
   provider       String    @default("openrouter") // "openrouter", "gemini", etc.
-  model          String    @default("nvidia/nemotron-3-ultra-550b-a55b")
+  model          String    @default("nvidia/nemotron-3-ultra-550b-a55b:free")
   label          String?
   isActive       Boolean   @default(true)
   lastUsed       DateTime?

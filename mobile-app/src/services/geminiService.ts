@@ -15,7 +15,7 @@ export interface SessionEvaluationResult {
 
 // Built-in shared OpenRouter Nemotron 3 Ultra 550B configuration (keys dynamically loaded from DB)
 export const OPENROUTER_CONFIG = {
-  defaultModel: 'nvidia/nemotron-3-ultra-550b-a55b',
+  defaultModel: 'nvidia/nemotron-3-ultra-550b-a55b:free',
   endpoint: 'https://openrouter.ai/api/v1/chat/completions',
   siteUrl: 'https://studyforge.app',
   siteName: 'StudyForge OS',
