@@ -41,15 +41,12 @@ export const GeminiService = {
     // 2. Fetch active free key from backend API connected to DB
     try {
       const endpoints = [
-        'https://study-forge-five-pi.vercel.app/api/keys/free',
-        '/api/keys/free'
+        `https://study-forge-five-pi.vercel.app/api/keys/free?t=${Date.now()}`,
+        `/api/keys/free?t=${Date.now()}`
       ];
       for (const endpoint of endpoints) {
         try {
-          const res = await fetch(endpoint, {
-            cache: 'no-store',
-            headers: { 'Cache-Control': 'no-cache' }
-          });
+          const res = await fetch(endpoint);
           if (res.ok) {
             const data = await res.json();
             if (data.success && data.key) {
@@ -274,7 +271,13 @@ Return ONLY valid JSON.`;
           const orData = await orResponse.json();
           const contentStr = orData?.choices?.[0]?.message?.content;
           if (contentStr) {
-            const parsed = JSON.parse(contentStr);
+            let parsed: any;
+            try {
+              const jsonMatch = contentStr.match(/\{[\s\S]*\}/);
+              parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(contentStr);
+            } catch {
+              parsed = { feedback: contentStr, xp: 60, depthScore: 8, difficultyScore: 7 };
+            }
             return {
               xp: Math.max(35, Math.min(100, Number(parsed.xp) || 60)),
               depthScore: Number(parsed.depthScore) || 8,

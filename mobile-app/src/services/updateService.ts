@@ -9,9 +9,9 @@ export interface AppReleaseInfo {
   sha256?: string;
 }
 
-export const CURRENT_VERSION = 'v1.0.9';
-export const CURRENT_VERSION_CODE = 10;
-export const CURRENT_BUILD_NUMBER = '2026.10.13-v10';
+export const CURRENT_VERSION = 'v1.0.10';
+export const CURRENT_VERSION_CODE = 11;
+export const CURRENT_BUILD_NUMBER = '2026.10.13-v11';
 
 const PRIMARY_VERSION_URL = 'https://study-forge-five-pi.vercel.app/api/version';
 const FALLBACK_VERSION_URL = 'https://raw.githubusercontent.com/athakurbng-lab/StudyForge/main/version.json';
@@ -32,31 +32,25 @@ export const UpdateService = {
       const cacheBust = `?t=${Date.now()}`;
       let data: AppReleaseInfo | null = null;
 
-      // 1. Try direct GitHub raw URL first (instantaneous upon push)
+      // 1. Try primary server endpoint first (with full CORS headers & OPTIONS support)
       try {
-        const res = await fetch(`${FALLBACK_VERSION_URL}${cacheBust}`, {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache' }
-        });
+        const res = await fetch(`${PRIMARY_VERSION_URL}${cacheBust}`);
         if (res.ok) {
           data = await res.json();
         }
       } catch (err) {
-        console.warn('GitHub raw version check failed, trying server endpoint:', err);
+        console.warn('Primary version check failed, trying GitHub raw fallback:', err);
       }
 
-      // 2. Fallback to primary server endpoint
+      // 2. Fallback to GitHub raw version.json
       if (!data) {
         try {
-          const res = await fetch(`${PRIMARY_VERSION_URL}${cacheBust}`, {
-            cache: 'no-store',
-            headers: { 'Cache-Control': 'no-cache' }
-          });
+          const res = await fetch(`${FALLBACK_VERSION_URL}${cacheBust}`);
           if (res.ok) {
             data = await res.json();
           }
         } catch (err) {
-          console.warn('Primary version check failed:', err);
+          console.warn('GitHub raw version check failed:', err);
         }
       }
 
@@ -94,7 +88,7 @@ export const UpdateService = {
     this.snoozeUpdate(release.version);
 
     // Prioritize direct GitHub raw URL with cache buster
-    const baseUrl = release.githubUrl || release.downloadUrl || 'https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.9.apk';
+    const baseUrl = release.githubUrl || release.downloadUrl || 'https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.10.apk';
     const separator = baseUrl.includes('?') ? '&' : '?';
     const targetUrl = `${baseUrl}${separator}v=${release.versionCode}&t=${Date.now()}`;
 

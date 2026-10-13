@@ -3,6 +3,19 @@ import prisma from '@/app/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+}
+
 export async function GET() {
   try {
     const activeKey = await prisma.freeKey.findFirst({
@@ -14,7 +27,10 @@ export async function GET() {
       return NextResponse.json({
         success: false,
         error: 'No active free key found in database'
-      }, { status: 404 });
+      }, { 
+        status: 404,
+        headers: CORS_HEADERS,
+      });
     }
 
     return NextResponse.json({
@@ -25,6 +41,7 @@ export async function GET() {
       key: activeKey.key,
     }, {
       headers: {
+        ...CORS_HEADERS,
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
         'Pragma': 'no-cache',
       }
@@ -34,6 +51,9 @@ export async function GET() {
     return NextResponse.json({
       success: false,
       error: 'Failed to fetch free key from database'
-    }, { status: 500 });
+    }, { 
+      status: 500,
+      headers: CORS_HEADERS,
+    });
   }
 }
