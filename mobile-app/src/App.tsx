@@ -24,6 +24,7 @@ import { ApiService, AuthUser } from './services/apiService';
 import { UpdateService, AppReleaseInfo } from './services/updateService';
 import { UpdateModal } from './components/UpdateModal';
 import { ActivityChart } from './components/ActivityChart';
+import { GeminiService } from './services/geminiService';
 
 StorageService.sanitizeStorage();
 
@@ -102,7 +103,10 @@ export const App: React.FC = () => {
     // 1. Immediately check on app launch
     checkAppUpdate();
 
-    // 2. Also check when user returns to app / screen turns on
+    // 2. Pre-warm / prefetch free key pool from database into storage cache
+    GeminiService.getOrFetchFreeKey().catch(() => {});
+
+    // 3. Also check when user returns to app / screen turns on
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         checkAppUpdate();
