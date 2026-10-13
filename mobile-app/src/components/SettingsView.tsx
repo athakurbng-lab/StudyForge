@@ -104,14 +104,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         setUpdateCheckMsg(`New version available: v${res.release.version}`);
       } else if (res.error) {
         setUpdateCheckMsg(res.error);
+        setAvailableRelease(null);
+        setPendingRelease(null);
       } else {
         setUpdateCheckMsg(`✓ App is up to date (${UpdateService.getCurrentVersion()})`);
-        if (res.release) {
-          setAvailableRelease(res.release);
-        }
+        setAvailableRelease(null);
+        setPendingRelease(null);
       }
     } catch {
       setUpdateCheckMsg('Unable to check for updates right now.');
+      setAvailableRelease(null);
+      setPendingRelease(null);
     } finally {
       setIsCheckingUpdate(false);
     }
@@ -655,14 +658,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
                 {updateCheckMsg}
               </p>
-              {availableRelease && (
+              {availableRelease && availableRelease.versionCode > UpdateService.getCurrentVersionCode() && (
                 <button
                   type="button"
                   onClick={() => setPendingRelease(availableRelease)}
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 transition-colors"
                 >
                   <Sparkles className="w-3 h-3" />
-                  <span>View Release Notes & Reinstall APK</span>
+                  <span>Install Update v{availableRelease.version}</span>
                 </button>
               )}
             </div>

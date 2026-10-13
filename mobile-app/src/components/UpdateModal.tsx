@@ -12,9 +12,12 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ release, onClose, onSn
   const [isInstalling, setIsInstalling] = useState(false);
   const [downloadTriggered, setDownloadTriggered] = useState(false);
 
+  const isAlreadyUpToDate = UpdateService.getCurrentVersionCode() >= release.versionCode;
+
   const handleInstall = () => {
     setIsInstalling(true);
     setDownloadTriggered(true);
+    UpdateService.snoozeUpdate(release.version);
     UpdateService.triggerInstall(release);
     setTimeout(() => {
       setIsInstalling(false);
@@ -39,20 +42,24 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ release, onClose, onSn
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-rose-500/20">
-              <Rocket className="w-5 h-5" />
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-md ${
+              isAlreadyUpToDate 
+                ? 'bg-emerald-600 shadow-emerald-600/20' 
+                : 'bg-gradient-to-tr from-rose-500 to-indigo-600 shadow-rose-500/20'
+            }`}>
+              {isAlreadyUpToDate ? <CheckCircle2 className="w-5 h-5" /> : <Rocket className="w-5 h-5" />}
             </div>
             <div>
               <div className="flex items-center gap-1.5">
                 <h3 className="text-sm font-black text-slate-900 dark:text-slate-100">
-                  Update Available!
+                  {isAlreadyUpToDate ? 'App is Up to Date!' : 'Update Available!'}
                 </h3>
                 <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                   v{release.version}
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Current {CURRENT_VERSION} • {release.fileSizeMb || 4.4} MB APK
+                Current {CURRENT_VERSION} • {release.fileSizeMb || 4.1} MB APK
               </p>
             </div>
           </div>
@@ -98,25 +105,36 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ release, onClose, onSn
 
         {/* Action Buttons */}
         <div className="space-y-2 pt-1">
-          <button
-            type="button"
-            disabled={isInstalling}
-            onClick={handleInstall}
-            className="w-full py-3 px-4 bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 active:scale-98 text-white text-xs font-bold rounded-2xl shadow-lg shadow-rose-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
-          >
-            {isInstalling ? (
-              <>
-                <Download className="w-4 h-4 animate-bounce" />
-                <span>Downloading & Opening Installer...</span>
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4" />
-                <span>Download & Install Update Now</span>
-                <ArrowRight className="w-3.5 h-3.5 ml-auto opacity-70" />
-              </>
-            )}
-          </button>
+          {isAlreadyUpToDate ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white text-xs font-bold rounded-2xl shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>You're on the Latest Version (v{CURRENT_VERSION})</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={isInstalling}
+              onClick={handleInstall}
+              className="w-full py-3 px-4 bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 active:scale-98 text-white text-xs font-bold rounded-2xl shadow-lg shadow-rose-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {isInstalling ? (
+                <>
+                  <Download className="w-4 h-4 animate-bounce" />
+                  <span>Downloading & Opening Installer...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Download & Install Update Now</span>
+                  <ArrowRight className="w-3.5 h-3.5 ml-auto opacity-70" />
+                </>
+              )}
+            </button>
+          )}
 
           {downloadTriggered && (
             <div className="p-3 bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800/60 rounded-xl text-left space-y-1 animate-in fade-in duration-200">

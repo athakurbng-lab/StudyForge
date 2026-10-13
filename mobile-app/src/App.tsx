@@ -88,9 +88,9 @@ export const App: React.FC = () => {
   }, []);
 
   // Check for OTA update on app start and resume
-  const checkAppUpdate = useCallback(async () => {
+  const checkAppUpdate = useCallback(async (isManual = false) => {
     try {
-      const res = await UpdateService.checkForUpdate(true);
+      const res = await UpdateService.checkForUpdate(isManual);
       if (res.hasUpdate && res.release) {
         setAvailableUpdate(res.release);
       }
@@ -100,8 +100,8 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // 1. Immediately check on app launch
-    checkAppUpdate();
+    // 1. Check on app launch (respects snooze if previously snoozed)
+    checkAppUpdate(false);
 
     // 2. Pre-warm / prefetch free key pool from database into storage cache
     GeminiService.getOrFetchFreeKey().catch(() => {});
@@ -109,7 +109,7 @@ export const App: React.FC = () => {
     // 3. Also check when user returns to app / screen turns on
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
-        checkAppUpdate();
+        checkAppUpdate(false);
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
@@ -118,7 +118,7 @@ export const App: React.FC = () => {
     let appListener: any = null;
     CapApp.addListener('appStateChange', (state) => {
       if (state.isActive) {
-        checkAppUpdate();
+        checkAppUpdate(false);
       }
     }).then((h) => {
       if (!isMounted) {
