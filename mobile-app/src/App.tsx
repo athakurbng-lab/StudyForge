@@ -222,7 +222,7 @@ export const App: React.FC = () => {
     if (newSession.usedFallback || (newSession.aiFeedback && newSession.aiFeedback.includes('Live AI API Key Failed'))) {
       const errorMsg = newSession.apiError || 'Live Gemini API key rejected, quota exceeded, or offline.';
       setAiNotice({
-        message: 'Gemini API Key Failed — Offline Engine Used',
+        message: 'Live AI Engine Unavailable — Offline Engine Used',
         details: errorMsg
       });
     }

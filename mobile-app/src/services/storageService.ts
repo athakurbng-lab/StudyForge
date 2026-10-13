@@ -19,6 +19,7 @@ export interface StudySession {
   category: string;
   apiError?: string;
   usedFallback?: boolean;
+  modelUsed?: string;
   isShared?: boolean;
 }
 
@@ -40,6 +41,14 @@ export interface UserSettings {
   buildNumber: string;
 }
 
+export interface FreeKeyData {
+  key: string;
+  provider: string;
+  model: string;
+  label?: string;
+  fetchedAt: number;
+}
+
 const STORAGE_KEYS = {
   ACTIVE_EXAM: 'studyforge_active_exam',
   CUSTOM_MODULES: 'studyforge_custom_modules',
@@ -50,6 +59,7 @@ const STORAGE_KEYS = {
   FREEZE_TOKENS: 'studyforge_freeze_tokens',
   TOTAL_XP: 'studyforge_total_xp',
   DAILY_XP_GOAL: 'studyforge_daily_xp_goal',
+  FREE_KEY: 'studyforge_free_key',
 };
 
 // Zero pre-filled sessions: clean slate for the user
@@ -367,8 +377,8 @@ export const StorageService = {
       inactivityAlertTime: '20:30',
       streakSaverEnabled: true,
       spacedRevisionAlertEnabled: true,
-      appVersion: 'v1.0.6 (Production)',
-      buildNumber: '2026.10.12-v7',
+      appVersion: 'v1.0.7 (Production)',
+      buildNumber: '2026.10.13-v8',
     };
     if (!saved) return defaults;
     try {
@@ -429,5 +439,20 @@ export const StorageService = {
 
   saveCachedGroupChat(groupId: string, messages: any[], hash: string): void {
     localStorage.setItem(`studyforge_chat_${groupId}`, JSON.stringify({ messages, hash, cachedAt: Date.now() }));
+  },
+
+  // Free API Key cached from Database
+  getFreeKey(): FreeKeyData | null {
+    const raw = localStorage.getItem(STORAGE_KEYS.FREE_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  },
+
+  saveFreeKey(data: FreeKeyData): void {
+    localStorage.setItem(STORAGE_KEYS.FREE_KEY, JSON.stringify(data));
   }
 };

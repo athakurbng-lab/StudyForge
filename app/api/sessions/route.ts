@@ -58,8 +58,7 @@ export async function POST(request: Request) {
         })
         .filter(Boolean);
 
-      if (geminiKeys.length > 0) {
-        const systemPrompt = `You are StudyForge AI, an expert exam preparation evaluator. 
+      const systemPrompt = `You are StudyForge AI, an expert exam preparation evaluator. 
 Your goal is to evaluate the user's NEW study session out of 100 XP based strictly on the CONTENT, depth, difficulty, and complexity of concepts studied, comparing it to the provided baselines.
 CRITICAL LEARNING CURVE: You are also provided with the user's up to 4 previous sessions from today. It is completely normal for a user to study the same topic across multiple sessions (e.g. reading consecutive chapters). Do NOT penalize them just for staying on one subject. You should ONLY retroactively adjust or penalize XP if you detect obvious cheating, identical copy-pasted duplicates, or zero-effort spam. If the new session reveals they were actually working on a massive, highly difficult project, you can INCREASE their past XP.
 
@@ -79,6 +78,59 @@ BASELINES FOR COMPARISON:
 ${baselineText}
 
 ${pastContext}`;
+
+      // Primary Tier: Query free key from database (free_keys table) or environment variable
+      try {
+        const freeKeyRecord = await prisma.freeKey.findFirst({
+          where: { isActive: true },
+          orderBy: { updatedAt: 'desc' }
+        });
+        const orKey = freeKeyRecord?.key || process.env.OPENROUTER_KEY;
+        const modelToUse = freeKeyRecord?.model || 'nvidia/nemotron-3-ultra-550b-a55b';
+
+        if (orKey) {
+          const orResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${orKey}`,
+              'HTTP-Referer': 'https://studyforge.app',
+              'X-Title': 'StudyForge OS',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: modelToUse,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `User's Study Session to Evaluate: ${rawText}` }
+              ],
+              response_format: { type: 'json_object' },
+              temperature: 0.2
+            })
+          });
+
+          if (orResponse.ok) {
+            const orData = await orResponse.json();
+            const content = orData?.choices?.[0]?.message?.content;
+            if (content) {
+              evaluation = JSON.parse(content);
+              if (evaluation && evaluation.aiBreakdown) {
+                evaluation.aiBreakdown = `[⚡ NVIDIA Nemotron 3 Ultra 550B]\n${evaluation.aiBreakdown}`;
+              }
+              if (freeKeyRecord) {
+                prisma.freeKey.update({
+                  where: { id: freeKeyRecord.id },
+                  data: { lastUsed: new Date(), totalCalls: { increment: 1 } }
+                }).catch(() => {});
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Server DB FreeKey Nemotron tier error, falling back to Gemini:', err);
+      }
+
+      // Secondary Tier: Google Gemini key cycling (if Nemotron did not produce evaluation)
+      if (!evaluation && geminiKeys.length > 0) {
 
         // Cycle through available keys
         let lastAiError = '';
@@ -103,6 +155,9 @@ ${pastContext}`;
               const aiText = aiData?.candidates?.[0]?.content?.parts?.[0]?.text;
               if (aiText) {
                 evaluation = JSON.parse(aiText);
+                if (evaluation && evaluation.aiBreakdown) {
+                  evaluation.aiBreakdown = `[✨ Google Gemini 2.5 Flash]\n${evaluation.aiBreakdown}`;
+                }
                 break; // Success! Exit the loop.
               }
             } else {
@@ -138,7 +193,7 @@ ${pastContext}`;
             pastSessionUpdates: []
           };
         }
-      } else {
+      } else if (!evaluation) {
         const failureReason = 'No server Gemini API keys configured';
         console.warn(`[StudyForge Backend] ${failureReason}. Switching to Offline Heuristic Engine.`);
 

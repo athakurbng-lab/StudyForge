@@ -68,7 +68,8 @@ export const AnswerWritingStudio: React.FC<AnswerWritingStudioProps> = ({
       notes: `Studio submission: ${studentAnswer.slice(0, 100)}...`,
       aiFeedback: result.feedback,
       date: now.toISOString().split('T')[0],
-      category: 'Studio'
+      category: 'Studio',
+      modelUsed: result.modelUsed
     };
 
     onSessionCompleted(session);

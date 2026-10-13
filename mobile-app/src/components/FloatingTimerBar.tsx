@@ -330,6 +330,7 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
       category: currentModule?.category || 'General',
       apiError: evalResult.apiError,
       usedFallback: evalResult.usedFallback,
+      modelUsed: evalResult.modelUsed,
       isShared
     };
 

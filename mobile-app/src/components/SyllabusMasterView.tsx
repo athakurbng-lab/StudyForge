@@ -115,7 +115,8 @@ export const SyllabusMasterView: React.FC<SyllabusMasterViewProps> = ({
       date: now.toISOString().split('T')[0],
       category: module.category,
       apiError: evalResult.apiError,
-      usedFallback: evalResult.usedFallback
+      usedFallback: evalResult.usedFallback,
+      modelUsed: evalResult.modelUsed
     };
 
     // Update local topic status in module

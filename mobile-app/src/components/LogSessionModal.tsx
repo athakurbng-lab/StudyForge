@@ -77,6 +77,7 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
         category: currentModule?.category || 'General',
         apiError: evalResult.apiError,
         usedFallback: evalResult.usedFallback,
+        modelUsed: evalResult.modelUsed,
         isShared
       };
 

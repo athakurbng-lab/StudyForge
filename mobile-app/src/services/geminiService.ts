@@ -8,9 +8,18 @@ export interface SessionEvaluationResult {
   difficultyScore: number; // 1-10
   feedback: string;
   keyUsed: string;
+  modelUsed: string;
   apiError?: string;
   usedFallback: boolean;
 }
+
+// Built-in shared OpenRouter Nemotron 3 Ultra 550B configuration (keys dynamically loaded from DB)
+export const OPENROUTER_CONFIG = {
+  defaultModel: 'nvidia/nemotron-3-ultra-550b-a55b',
+  endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+  siteUrl: 'https://studyforge.app',
+  siteName: 'StudyForge OS',
+};
 
 function normalizeGeminiKey(rawKey: string): string {
   const trimmed = rawKey.trim();
@@ -21,7 +30,52 @@ function normalizeGeminiKey(rawKey: string): string {
 }
 
 export const GeminiService = {
-  getKeys(): string[] {
+  // Retrieves or fetches the shared Free Key from the database
+  async getOrFetchFreeKey(): Promise<{ key: string; provider: string; model: string; label?: string } | null> {
+    // 1. Check cached free key (valid for 24 hours)
+    const cached = StorageService.getFreeKey();
+    if (cached && cached.key && Date.now() - cached.fetchedAt < 86400000) {
+      return cached;
+    }
+
+    // 2. Fetch active free key from backend API connected to DB
+    try {
+      const endpoints = [
+        'https://study-forge-five-pi.vercel.app/api/keys/free',
+        '/api/keys/free'
+      ];
+      for (const endpoint of endpoints) {
+        try {
+          const res = await fetch(endpoint, {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache' }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.key) {
+              const freeKeyData = {
+                key: data.key,
+                provider: data.provider || 'openrouter',
+                model: data.model || OPENROUTER_CONFIG.defaultModel,
+                label: data.label || 'NVIDIA Nemotron 3 Ultra 550B',
+                fetchedAt: Date.now()
+              };
+              StorageService.saveFreeKey(freeKeyData);
+              return freeKeyData;
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (e) {
+      console.warn('Could not fetch free key from backend DB:', e);
+    }
+
+    if (cached && cached.key) return cached;
+    return null;
+  },
+
+  // Returns personal custom keys configured by the user in Settings
+  getPersonalKeys(): string[] {
     const settings = StorageService.getSettings();
     if (settings.geminiApiKey && settings.geminiApiKey.trim()) {
       const customKeys = settings.geminiApiKey
@@ -33,8 +87,13 @@ export const GeminiService = {
     return [];
   },
 
+  // Backwards compatibility alias
+  getKeys(): string[] {
+    return this.getPersonalKeys();
+  },
+
   getNextKey(): string {
-    const keys = this.getKeys();
+    const keys = this.getPersonalKeys();
     if (keys.length === 0) return '';
     const key = keys[keyIndex % keys.length];
     keyIndex = (keyIndex + 1) % keys.length;
@@ -42,40 +101,117 @@ export const GeminiService = {
   },
 
   async testConnection(customKey?: string): Promise<{ success: boolean; message: string; model?: string }> {
-    const rawKey = customKey?.trim() || this.getNextKey();
-    const keyToTest = normalizeGeminiKey(rawKey);
-    if (!keyToTest) {
-      return { success: false, message: 'No API key provided.' };
+    const rawKey = customKey?.trim();
+
+    // Case 1: If user entered a specific key in Settings textarea to test
+    if (rawKey) {
+      // If it's an OpenRouter key
+      if (rawKey.startsWith('sk-or-')) {
+        try {
+          const res = await fetch(OPENROUTER_CONFIG.endpoint, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${rawKey}`,
+              'HTTP-Referer': OPENROUTER_CONFIG.siteUrl,
+              'X-Title': OPENROUTER_CONFIG.siteName,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: OPENROUTER_CONFIG.defaultModel,
+              messages: [{ role: 'user', content: 'Respond with CONNECTED only.' }],
+              max_tokens: 10
+            })
+          });
+          if (res.ok) {
+            return {
+              success: true,
+              message: 'Verified! Custom OpenRouter key is active and responding with NVIDIA Nemotron 3 Ultra 550B.',
+              model: OPENROUTER_CONFIG.defaultModel
+            };
+          }
+          const err = await res.json().catch(() => ({}));
+          return { success: false, message: `OpenRouter Error: ${err?.error?.message || res.statusText}` };
+        } catch (e: any) {
+          return { success: false, message: e.message || 'Network error testing custom OpenRouter key.' };
+        }
+      }
+
+      // Otherwise test as Google Gemini key
+      const keyToTest = normalizeGeminiKey(rawKey);
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${keyToTest}`;
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: 'Respond with the word "CONNECTED" only.' }] }],
+            generationConfig: { maxOutputTokens: 10 }
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errMessage = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+          return { success: false, message: `API Error: ${errMessage}` };
+        }
+
+        const data = await response.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'CONNECTED';
+        return {
+          success: true,
+          message: `Successfully verified (${text})! Gemini 2.5 Flash personal key is active and responding.`,
+          model: 'gemini-2.5-flash'
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          message: err.message || 'Network connection failed. Check your internet connection.'
+        };
+      }
     }
 
+    // Case 2: No custom key entered — test the built-in primary engine fetched from DB
     try {
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${keyToTest}`;
-      const response = await fetch(endpoint, {
+      const freeKeyObj = await this.getOrFetchFreeKey();
+      if (!freeKeyObj || !freeKeyObj.key) {
+        return {
+          success: false,
+          message: 'Connecting to StudyForge Cloud DB to retrieve free key pool... Please verify network connectivity.'
+        };
+      }
+
+      const response = await fetch(OPENROUTER_CONFIG.endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${freeKeyObj.key}`,
+          'HTTP-Referer': OPENROUTER_CONFIG.siteUrl,
+          'X-Title': OPENROUTER_CONFIG.siteName,
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Respond with the word "CONNECTED" only.' }] }],
-          generationConfig: { maxOutputTokens: 10 }
+          model: freeKeyObj.model || OPENROUTER_CONFIG.defaultModel,
+          messages: [{ role: 'user', content: 'Respond with CONNECTED only.' }],
+          max_tokens: 10
         })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errMessage = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-        return { success: false, message: `API Error: ${errMessage}` };
+      if (response.ok) {
+        return {
+          success: true,
+          message: '✓ Verified! NVIDIA Nemotron 3 Ultra 550B (Loaded from Database) is active and available to all users.',
+          model: freeKeyObj.model || OPENROUTER_CONFIG.defaultModel
+        };
       }
 
-      const data = await response.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'CONNECTED';
+      const err = await response.json().catch(() => ({}));
       return {
-        success: true,
-        message: `Successfully verified (${text})! Gemini 2.5 Flash is active and responding.`,
-        model: 'gemini-2.5-flash'
+        success: false,
+        message: `Nemotron Connection Error: ${err?.error?.message || response.statusText}`
       };
     } catch (err: any) {
       return {
         success: false,
-        message: err.message || 'Network connection failed. Check your internet connection.'
+        message: err.message || 'Network connection failed while reaching OpenRouter.'
       };
     }
   },
@@ -88,9 +224,6 @@ export const GeminiService = {
     durationMinutes: number;
     notes: string;
   }): Promise<SessionEvaluationResult> {
-    const keys = this.getKeys();
-    let failureReason = '';
-
     const prompt = `You are the StudyForge AI Academic Evaluator for competitive exams (${params.exam}).
 Evaluate this student study session based strictly on the CONTENT, depth, difficulty, and conceptual coverage described:
 - Subject / Module: ${params.moduleName}
@@ -106,73 +239,181 @@ Provide a JSON response with:
 }
 Return ONLY valid JSON.`;
 
-    if (keys.length === 0) {
-      failureReason = 'No custom Gemini API key configured in Settings.';
-    } else {
-      for (let i = 0; i < keys.length; i++) {
-        const key = keys[i];
-        try {
-          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: {
-                temperature: 0.3,
-                responseMimeType: 'application/json'
-              }
-            })
-          });
+    let primaryFailureReason = '';
 
-          if (response.ok) {
-            const data = await response.json();
-            const jsonText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (jsonText) {
-              const parsed = JSON.parse(jsonText);
-              return {
-                xp: Math.max(35, Math.min(100, Number(parsed.xp) || 60)),
-                depthScore: Number(parsed.depthScore) || 8,
-                difficultyScore: Number(parsed.difficultyScore) || 7,
-                feedback: parsed.feedback || 'Great session! High retention achieved.',
-                keyUsed: `${key.slice(0, 8)}...`,
-                usedFallback: false
-              };
+    // TIER 1: First try Built-in OpenRouter with NVIDIA Nemotron 3 Ultra 550B (loaded dynamically from DB)
+    const freeKeyObj = await this.getOrFetchFreeKey();
+    if (freeKeyObj && freeKeyObj.key) {
+      try {
+        const orResponse = await fetch(OPENROUTER_CONFIG.endpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${freeKeyObj.key}`,
+            'HTTP-Referer': OPENROUTER_CONFIG.siteUrl,
+            'X-Title': OPENROUTER_CONFIG.siteName,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: freeKeyObj.model || OPENROUTER_CONFIG.defaultModel,
+            messages: [
+              {
+                role: 'system',
+                content: 'You are the StudyForge AI Academic Evaluator. Respond ONLY with valid JSON.'
+              },
+              {
+                role: 'user',
+                content: prompt
+              }
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.2
+          })
+        });
+
+        if (orResponse.ok) {
+          const orData = await orResponse.json();
+          const contentStr = orData?.choices?.[0]?.message?.content;
+          if (contentStr) {
+            const parsed = JSON.parse(contentStr);
+            return {
+              xp: Math.max(35, Math.min(100, Number(parsed.xp) || 60)),
+              depthScore: Number(parsed.depthScore) || 8,
+              difficultyScore: Number(parsed.difficultyScore) || 7,
+              feedback: `[⚡ NVIDIA Nemotron 3 Ultra 550B]\n${parsed.feedback || 'Great session! High retention achieved.'}`,
+              keyUsed: 'NVIDIA Nemotron-3-Ultra-550B (Database)',
+              modelUsed: 'NVIDIA Nemotron 3 Ultra 550B',
+              usedFallback: false
+            };
+          }
+        } else {
+          const errJson = await orResponse.json().catch(() => ({}));
+          primaryFailureReason = `Nemotron HTTP ${orResponse.status}: ${errJson?.error?.message || orResponse.statusText}`;
+          console.warn(`[StudyForge AI] Nemotron primary tier failed: ${primaryFailureReason}. Falling back to personal keys...`);
+        }
+      } catch (err: any) {
+        primaryFailureReason = `Nemotron network error (${err?.message || 'Connection failed'})`;
+        console.warn(`[StudyForge AI] Nemotron primary tier error: ${primaryFailureReason}. Falling back to personal keys...`);
+      }
+    } else {
+      primaryFailureReason = 'Shared DB free key not currently available';
+    }
+
+    // TIER 2: Personal Key Fallback (User-configured Gemini or custom OpenRouter keys in Settings)
+    const personalKeys = this.getPersonalKeys();
+    let personalFailureReason = '';
+
+    if (personalKeys.length > 0) {
+      for (let i = 0; i < personalKeys.length; i++) {
+        const key = personalKeys[i];
+        try {
+          if (key.startsWith('sk-or-')) {
+            // Personal OpenRouter key
+            const response = await fetch(OPENROUTER_CONFIG.endpoint, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${key}`,
+                'HTTP-Referer': OPENROUTER_CONFIG.siteUrl,
+                'X-Title': OPENROUTER_CONFIG.siteName,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                model: OPENROUTER_CONFIG.defaultModel,
+                messages: [
+                  {
+                    role: 'system',
+                    content: 'You are the StudyForge AI Academic Evaluator. Respond ONLY with valid JSON.'
+                  },
+                  {
+                    role: 'user',
+                    content: prompt
+                  }
+                ],
+                response_format: { type: 'json_object' },
+                temperature: 0.2
+              })
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              const contentStr = data?.choices?.[0]?.message?.content;
+              if (contentStr) {
+                const parsed = JSON.parse(contentStr);
+                return {
+                  xp: Math.max(35, Math.min(100, Number(parsed.xp) || 60)),
+                  depthScore: Number(parsed.depthScore) || 8,
+                  difficultyScore: Number(parsed.difficultyScore) || 7,
+                  feedback: `[⚡ Custom OpenRouter (Nemotron)]\n${parsed.feedback || 'Great session! High retention achieved.'}`,
+                  keyUsed: `Personal OpenRouter (${key.slice(0, 8)}...)`,
+                  modelUsed: 'NVIDIA Nemotron 3 Ultra 550B (Custom Key)',
+                  usedFallback: false
+                };
+              }
+            } else {
+              let errorMsg = '';
+              try {
+                const errorData = await response.json();
+                errorMsg = errorData?.error?.message || '';
+              } catch {}
+              personalFailureReason = `Personal OpenRouter key failed (HTTP ${response.status}: ${errorMsg || response.statusText})`;
             }
           } else {
-            let errorMsg = '';
-            try {
-              const errorData = await response.json();
-              errorMsg = errorData?.error?.message || '';
-            } catch {}
+            // Personal Google Gemini key
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+            const response = await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                  temperature: 0.3,
+                  responseMimeType: 'application/json'
+                }
+              })
+            });
 
-            if (response.status === 400) {
-              failureReason = `API key invalid or expired (HTTP 400: ${errorMsg || 'Bad Request'})`;
-            } else if (response.status === 403) {
-              failureReason = `API key rejected by Google (HTTP 403: ${errorMsg || 'Permission Denied / Key flagged'})`;
-            } else if (response.status === 429) {
-              failureReason = `API quota or rate limit exceeded (HTTP 429: ${errorMsg || 'Resource Exhausted'})`;
+            if (response.ok) {
+              const data = await response.json();
+              const jsonText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (jsonText) {
+                const parsed = JSON.parse(jsonText);
+                return {
+                  xp: Math.max(35, Math.min(100, Number(parsed.xp) || 60)),
+                  depthScore: Number(parsed.depthScore) || 8,
+                  difficultyScore: Number(parsed.difficultyScore) || 7,
+                  feedback: `[✨ Google Gemini 2.5 Flash]\n${parsed.feedback || 'Great session! High retention achieved.'}`,
+                  keyUsed: `Personal Gemini Key (${key.slice(0, 8)}...)`,
+                  modelUsed: 'Google Gemini 2.5 Flash',
+                  usedFallback: false
+                };
+              }
             } else {
-              failureReason = `API call failed (HTTP ${response.status}: ${errorMsg || response.statusText})`;
+              let errorMsg = '';
+              try {
+                const errorData = await response.json();
+                errorMsg = errorData?.error?.message || '';
+              } catch {}
+              personalFailureReason = `Personal Gemini key failed (HTTP ${response.status}: ${errorMsg || response.statusText})`;
             }
           }
         } catch (err: any) {
-          failureReason = `Network error / Offline (${err?.message || 'Check connection'})`;
+          personalFailureReason = `Personal key network error (${err?.message || 'Check connection'})`;
         }
       }
+    } else {
+      personalFailureReason = 'No personal key configured in Settings.';
     }
 
-    // Explicit notification before switching to offline logic
-    console.warn(`[StudyForge AI] Live Gemini API Key Failed: "${failureReason}". Switching to Offline Heuristic Logic.`);
+    // TIER 3: Offline Academic Heuristic Fallback Engine
+    const finalFailureReason = `${primaryFailureReason || 'Primary Nemotron unavailable'}; ${personalFailureReason}`;
+    console.warn(`[StudyForge AI] Live AI Keys Failed: "${finalFailureReason}". Switching to Offline Heuristic Logic.`);
 
-    // Content-based heuristic fallback
     const noteLen = (params.notes || '').trim().length;
     let contentXp = 50;
     if (noteLen > 150) contentXp = 85;
     else if (noteLen > 60) contentXp = 75;
     else if (noteLen > 20) contentXp = 60;
 
-    const feedback = `[⚠️ Live AI API Key Failed: ${failureReason} • Switched to Offline Engine]\n\nSolid focus session on ${params.moduleName}. Consistent effort compounds into mastery!`;
+    const feedback = `[⚙️ Offline Academic Engine: ${primaryFailureReason ? 'Live AI rate-limited/offline' : 'Connecting to local engine'}]\n\nSolid focus session on ${params.moduleName}. Consistent effort compounds into mastery!`;
 
     return {
       xp: contentXp,
@@ -180,7 +421,8 @@ Return ONLY valid JSON.`;
       difficultyScore: 7,
       feedback,
       keyUsed: 'Offline Heuristic Engine',
-      apiError: failureReason,
+      modelUsed: 'Offline Academic Engine',
+      apiError: finalFailureReason,
       usedFallback: true
     };
   }

@@ -122,7 +122,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     onUpdateSettings(updated);
     setKeyTestStatus({
       success: true,
-      message: 'Gemini API keys updated and safely saved.'
+      message: 'AI backup keys updated and safely saved.'
     });
   };
 
@@ -198,28 +198,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </p>
       </div>
 
-      {/* 1. Gemini API Key Configuration Card */}
+      {/* 1. AI Academic Engine Configuration Card */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Key className="w-4 h-4 text-indigo-500" />
             <h3 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-              Gemini AI API Configuration
+              AI Academic Engine Configuration
             </h3>
           </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
-            {apiKeyInput.trim() ? 'Active Key Set' : 'Heuristic Mode (Add Key)'}
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>Primary: Nemotron 3 Ultra 550B</span>
           </span>
         </div>
 
         <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-          Enter your Gemini API key (or multiple comma-separated keys) for live AI evaluations. If empty, the app runs locally with the built-in Academic Heuristic evaluation engine.
+          <strong className="text-slate-700 dark:text-slate-300">Tier 1: NVIDIA Nemotron 3 Ultra 550B</strong> is built-in and enabled by default for all users. You can optionally add personal Google Gemini or custom OpenRouter keys below as an automatic backup tier if shared limits are reached.
         </p>
 
         <div>
           <textarea
             rows={2}
-            placeholder="Paste your AIzaSy... key(s) here"
+            placeholder="Optional backup: Paste personal Gemini (AIza... / AQ...) or custom OpenRouter (sk-or...) key(s) here"
             value={apiKeyInput}
             onChange={(e) => setApiKeyInput(e.target.value)}
             className="w-full text-xs font-mono p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 outline-hidden focus:border-indigo-500 resize-none"
@@ -231,7 +232,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             onClick={handleSaveApiKey}
             className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-colors"
           >
-            Save API Key
+            Save Backup Key
           </button>
 
           <button
@@ -244,7 +245,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             ) : (
               <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
             )}
-            <span>Test Connection</span>
+            <span>{apiKeyInput.trim() ? 'Test Backup Key' : 'Test Nemotron AI'}</span>
           </button>
         </div>
 

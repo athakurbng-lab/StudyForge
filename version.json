@@ -1,18 +1,18 @@
 {
-  "version": "1.0.6",
-  "versionCode": 7,
-  "releaseDate": "2026-10-12",
+  "version": "1.0.7",
+  "versionCode": 8,
+  "releaseDate": "2026-10-13",
   "minSupportedVersion": "1.0.0",
   "changelog": [
+    "⚡ NVIDIA Nemotron 3 Ultra 550B Integration: Built-in, high-intelligence academic AI evaluator enabled for all users by default",
+    "🛡️ Seamless Multi-Tier Fallback: Auto-falls back to personal Gemini/OpenRouter keys or local offline heuristics if shared quotas fill up",
     "🎯 Pomodoro Floating Bar 5s Auto-Hide: Automatically collapses into an unobtrusive floating dot docked to the right edge when idle",
     "✨ One-Tap Dot Expansion: Tap the right-docked floating dot to instantly restore the full timer bar with haptic feedback",
-    "🚀 Startup & Wake Auto-Update Checking: The app checks for new updates on launch and screen resume",
-    "📥 Direct GitHub Raw OTA Link: Bypasses stale web caches to guarantee the freshest binary is installed",
-    "⏱️ Background Pomodoro & Stopwatch Wall-Clock Sync",
-    "🔔 Native Scheduled Notifications when Pomodoro finishes while phone is asleep"
+    "🚀 Startup & Wake Auto-Update Checking: Checks for updates automatically on app launch and wake",
+    "📥 Direct GitHub Raw OTA Link: Ensures instantaneous, freshest binary delivery"
   ],
   "downloadUrl": "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.0.apk",
   "githubUrl": "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.0.apk",
   "fileSizeMb": 4.1,
-  "sha256": "a46894acf629358dc6f94d5b86fe35fd4bf7aacc4e2d39c72a87b59a0e65b116"
+  "sha256": "a902123c337567105ec61f926ee2078014ee7b0396d28e6a7e7b908558415143"
 }

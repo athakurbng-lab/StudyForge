@@ -213,9 +213,19 @@ export const SessionTimeline: React.FC<SessionTimelineProps> = ({
                       <span>{session.isShared ? 'Public' : 'Private'}</span>
                     </button>
 
+                    {session.modelUsed ? (
+                      <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-md truncate max-w-[130px]">
+                        {session.modelUsed.includes('Nemotron') ? '⚡ Nemotron 550B' : session.modelUsed.includes('Gemini') ? '✨ Gemini Flash' : '⚙️ Offline'}
+                      </span>
+                    ) : session.aiFeedback?.includes('Nemotron') ? (
+                      <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-md">
+                        ⚡ Nemotron 550B
+                      </span>
+                    ) : null}
+
                     {getMoodIcon(session.mood)}
                     <span className="flex items-center gap-0.5 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded-sm">
-                      <Sparkles className="w-3 h-3" />
+                      <Sparkles className="w-3.5 h-3.5" />
                       +{session.xpEarned} XP
                     </span>
                   </div>
@@ -244,11 +254,16 @@ export const SessionTimeline: React.FC<SessionTimelineProps> = ({
                 {/* Expanded AI Evaluation Drawer */}
                 {isExpanded && (
                   <div className="mt-3 pt-2.5 border-t border-slate-200 dark:border-slate-700/80 animate-in fade-in duration-200 space-y-2.5">
-                    {session.usedFallback || (session.aiFeedback && session.aiFeedback.includes('Live AI')) ? (
+                    {session.usedFallback || (session.aiFeedback && (session.aiFeedback.includes('Offline') || session.aiFeedback.includes('Live AI'))) ? (
                       <div className="bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-3 text-xs space-y-2">
-                        <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-bold text-[11px]">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                          <span>Gemini API Key Notice: Offline Logic Used</span>
+                        <div className="flex items-center justify-between gap-1.5 text-amber-800 dark:text-amber-300 font-bold text-[11px]">
+                          <div className="flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span>Academic Engine: Offline Mode</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200">
+                            ⚙️ Offline Engine
+                          </span>
                         </div>
                         {session.apiError && (
                           <div className="text-[10px] font-medium text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 p-2 rounded-lg border border-rose-200 dark:border-rose-900/50">
@@ -261,11 +276,16 @@ export const SessionTimeline: React.FC<SessionTimelineProps> = ({
                       </div>
                     ) : (
                       <div className="bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 rounded-lg p-2.5 text-xs">
-                        <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-300 font-bold mb-1 text-[11px]">
-                          <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                          <span>Gemini 2.5 Flash Evaluation</span>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-300 font-bold text-[11px]">
+                            <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>AI Academic Evaluation</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/70 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800 flex items-center gap-1">
+                            <span>{session.modelUsed || (session.aiFeedback?.includes('Nemotron') ? '⚡ Nemotron 3 Ultra 550B' : '✨ Gemini 2.5 Flash')}</span>
+                          </span>
                         </div>
-                        <p className="text-[11px] text-slate-700 dark:text-slate-200 leading-relaxed">
+                        <p className="text-[11px] text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-line">
                           {session.aiFeedback || 'High retention observed. Concepts synthesized effectively with solid focus stamina.'}
                         </p>
                       </div>
