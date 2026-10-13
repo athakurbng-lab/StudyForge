@@ -9,9 +9,9 @@ export interface AppReleaseInfo {
   sha256?: string;
 }
 
-export const CURRENT_VERSION = 'v1.0.7';
-export const CURRENT_VERSION_CODE = 8;
-export const CURRENT_BUILD_NUMBER = '2026.10.13-v8';
+export const CURRENT_VERSION = 'v1.0.8';
+export const CURRENT_VERSION_CODE = 9;
+export const CURRENT_BUILD_NUMBER = '2026.10.13-v9';
 
 const PRIMARY_VERSION_URL = 'https://study-forge-five-pi.vercel.app/api/version';
 const FALLBACK_VERSION_URL = 'https://raw.githubusercontent.com/athakurbng-lab/StudyForge/main/version.json';
@@ -32,9 +32,9 @@ export const UpdateService = {
       const cacheBust = `?t=${Date.now()}`;
       let data: AppReleaseInfo | null = null;
 
-      // 1. Try primary server endpoint
+      // 1. Try direct GitHub raw URL first (instantaneous upon push)
       try {
-        const res = await fetch(`${PRIMARY_VERSION_URL}${cacheBust}`, {
+        const res = await fetch(`${FALLBACK_VERSION_URL}${cacheBust}`, {
           cache: 'no-store',
           headers: { 'Cache-Control': 'no-cache' }
         });
@@ -42,18 +42,21 @@ export const UpdateService = {
           data = await res.json();
         }
       } catch (err) {
-        console.warn('Primary version check failed, trying GitHub raw fallback:', err);
+        console.warn('GitHub raw version check failed, trying server endpoint:', err);
       }
 
-      // 2. Fallback to GitHub raw version.json
+      // 2. Fallback to primary server endpoint
       if (!data) {
         try {
-          const res = await fetch(`${FALLBACK_VERSION_URL}${cacheBust}`, { cache: 'no-store' });
+          const res = await fetch(`${PRIMARY_VERSION_URL}${cacheBust}`, {
+            cache: 'no-store',
+            headers: { 'Cache-Control': 'no-cache' }
+          });
           if (res.ok) {
             data = await res.json();
           }
         } catch (err) {
-          console.warn('GitHub version check fallback failed:', err);
+          console.warn('Primary version check failed:', err);
         }
       }
 

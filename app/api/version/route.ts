@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   const versionData = {
-    version: "1.0.7",
-    versionCode: 8,
+    version: "1.0.8",
+    versionCode: 9,
     releaseDate: "2026-10-13",
     minSupportedVersion: "1.0.0",
     changelog: [
@@ -17,7 +17,7 @@ export async function GET() {
     downloadUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.0.apk",
     githubUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.0.apk",
     fileSizeMb: 4.1,
-    sha256: "cea5606346a2fb2d8e4059053ed84b9d486e67be86bc62e5ecc9abab2a6a24d8"
+    sha256: "486c856552510aec611ffa8bfe9481d357968bf875960b0f32c6b4ed221f1f02"
   };
 
   return NextResponse.json(versionData, {
