@@ -31,7 +31,7 @@ function normalizeGeminiKey(rawKey: string): string {
 
 export const GeminiService = {
   // Retrieves or fetches the shared Free Key from the database
-  async getOrFetchFreeKey(): Promise<{ key: string; provider: string; model: string; label?: string } | null> {
+  async getOrFetchFreeKey(): Promise<{ key: string; provider: string; model: string; endpoint?: string; label?: string } | null> {
     // 1. Check cached free key (valid for 24 hours)
     const cached = StorageService.getFreeKey();
     if (cached && cached.key && Date.now() - cached.fetchedAt < 86400000) {
@@ -54,6 +54,7 @@ export const GeminiService = {
                 key: data.key,
                 provider: data.provider || 'openrouter',
                 model: data.model || OPENROUTER_CONFIG.defaultModel,
+                endpoint: data.endpoint || OPENROUTER_CONFIG.endpoint,
                 label: data.label || 'NVIDIA Nemotron 3 Ultra 550B',
                 fetchedAt: Date.now()
               };
@@ -177,7 +178,11 @@ export const GeminiService = {
         };
       }
 
-      const response = await fetch(OPENROUTER_CONFIG.endpoint, {
+      const targetEndpoint = freeKeyObj.endpoint || OPENROUTER_CONFIG.endpoint;
+      const targetModel = freeKeyObj.model || OPENROUTER_CONFIG.defaultModel;
+      const targetLabel = freeKeyObj.label || (freeKeyObj.provider === 'huggingface' ? 'Ternary Bonsai 2' : 'NVIDIA Nemotron 3 Ultra 550B');
+
+      const response = await fetch(targetEndpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${freeKeyObj.key}`,
@@ -186,7 +191,7 @@ export const GeminiService = {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: freeKeyObj.model || OPENROUTER_CONFIG.defaultModel,
+          model: targetModel,
           messages: [{ role: 'user', content: 'Respond with CONNECTED only.' }],
           max_tokens: 10
         })
@@ -195,20 +200,20 @@ export const GeminiService = {
       if (response.ok) {
         return {
           success: true,
-          message: '✓ Verified! NVIDIA Nemotron 3 Ultra 550B (Loaded from Database) is active and available to all users.',
-          model: freeKeyObj.model || OPENROUTER_CONFIG.defaultModel
+          message: `✓ Verified! ${targetLabel} (Loaded from Database) is active and available to all users.`,
+          model: targetModel
         };
       }
 
       const err = await response.json().catch(() => ({}));
       return {
         success: false,
-        message: `Nemotron Connection Error: ${err?.error?.message || response.statusText}`
+        message: `${targetLabel} Connection Error: ${err?.error?.message || response.statusText}`
       };
     } catch (err: any) {
       return {
         success: false,
-        message: err.message || 'Network connection failed while reaching OpenRouter.'
+        message: err.message || 'Network connection failed while reaching AI endpoint.'
       };
     }
   },
@@ -238,11 +243,15 @@ Return ONLY valid JSON.`;
 
     let primaryFailureReason = '';
 
-    // TIER 1: First try Built-in OpenRouter with NVIDIA Nemotron 3 Ultra 550B (loaded dynamically from DB)
+    // TIER 1: First try Built-in Free Key engine (Ternary Bonsai 2 or NVIDIA Nemotron loaded from DB)
     const freeKeyObj = await this.getOrFetchFreeKey();
     if (freeKeyObj && freeKeyObj.key) {
+      const targetEndpoint = freeKeyObj.endpoint || OPENROUTER_CONFIG.endpoint;
+      const targetModel = freeKeyObj.model || OPENROUTER_CONFIG.defaultModel;
+      const targetLabel = freeKeyObj.label || (freeKeyObj.provider === 'huggingface' ? '🌲 Ternary Bonsai 2' : '⚡ NVIDIA Nemotron 3 Ultra 550B');
+
       try {
-        const orResponse = await fetch(OPENROUTER_CONFIG.endpoint, {
+        const orResponse = await fetch(targetEndpoint, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${freeKeyObj.key}`,
@@ -251,7 +260,7 @@ Return ONLY valid JSON.`;
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            model: freeKeyObj.model || OPENROUTER_CONFIG.defaultModel,
+            model: targetModel,
             messages: [
               {
                 role: 'system',
@@ -282,20 +291,20 @@ Return ONLY valid JSON.`;
               xp: Math.max(35, Math.min(100, Number(parsed.xp) || 60)),
               depthScore: Number(parsed.depthScore) || 8,
               difficultyScore: Number(parsed.difficultyScore) || 7,
-              feedback: `[⚡ NVIDIA Nemotron 3 Ultra 550B]\n${parsed.feedback || 'Great session! High retention achieved.'}`,
-              keyUsed: 'NVIDIA Nemotron-3-Ultra-550B (Database)',
-              modelUsed: 'NVIDIA Nemotron 3 Ultra 550B',
+              feedback: `[${targetLabel}]\n${parsed.feedback || 'Great session! High retention achieved.'}`,
+              keyUsed: `${targetLabel} (Database)`,
+              modelUsed: targetModel,
               usedFallback: false
             };
           }
         } else {
           const errJson = await orResponse.json().catch(() => ({}));
-          primaryFailureReason = `Nemotron HTTP ${orResponse.status}: ${errJson?.error?.message || orResponse.statusText}`;
-          console.warn(`[StudyForge AI] Nemotron primary tier failed: ${primaryFailureReason}. Falling back to personal keys...`);
+          primaryFailureReason = `${targetLabel} HTTP ${orResponse.status}: ${errJson?.error?.message || orResponse.statusText}`;
+          console.warn(`[StudyForge AI] ${targetLabel} primary tier failed: ${primaryFailureReason}. Falling back to personal keys...`);
         }
       } catch (err: any) {
-        primaryFailureReason = `Nemotron network error (${err?.message || 'Connection failed'})`;
-        console.warn(`[StudyForge AI] Nemotron primary tier error: ${primaryFailureReason}. Falling back to personal keys...`);
+        primaryFailureReason = `${targetLabel} network error (${err?.message || 'Connection failed'})`;
+        console.warn(`[StudyForge AI] ${targetLabel} primary tier error: ${primaryFailureReason}. Falling back to personal keys...`);
       }
     } else {
       primaryFailureReason = 'Shared DB free key not currently available';

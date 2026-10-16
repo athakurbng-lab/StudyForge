@@ -39,6 +39,7 @@ export async function GET() {
       model: activeKey.model,
       label: activeKey.label || 'NVIDIA Nemotron 3 Ultra 550B (Shared Global)',
       key: activeKey.key,
+      endpoint: activeKey.endpoint || 'https://openrouter.ai/api/v1/chat/completions',
     }, {
       headers: {
         ...CORS_HEADERS,

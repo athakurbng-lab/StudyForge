@@ -63,8 +63,8 @@ export const ApiService = {
       const dateStr = createdDate.toISOString().split('T')[0];
       const timeStr = createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       
-      // Flat 1 hour (60 min) for sessions without explicit hour/duration data
-      const durationMinutes = (typeof s.durationMinutes === 'number' && s.durationMinutes > 0 && s.durationMinutes <= 480)
+      // Extract genuine duration from cloud session (up to 12 hours)
+      const durationMinutes = (typeof s.durationMinutes === 'number' && s.durationMinutes > 0 && s.durationMinutes <= 720)
         ? s.durationMinutes
         : 60;
 
@@ -73,12 +73,13 @@ export const ApiService = {
 
       return {
         id: s.id || `cloud-${Date.now()}`,
+        cloudId: s.id,
         exam: 'upsc',
         moduleId: 'cloud_sync',
         moduleName: s.title || 'Study Sprint',
         topicName: s.tags?.[0] || undefined,
-        startTime: timeStr,
-        endTime: timeStr,
+        startTime: s.startTime || timeStr,
+        endTime: s.endTime || timeStr,
         durationMinutes,
         xpEarned: s.xpAwarded || 0,
         mood: genuineMood,
@@ -89,6 +90,65 @@ export const ApiService = {
         isShared: Boolean(s.isShared)
       };
     });
+  },
+
+  // Non-destructive reconciliation between local on-device sessions and cloud records
+  reconcileSessions(localSessions: StudySession[], cloudRaw: any[]): StudySession[] {
+    const mappedCloud = this.mapCloudSessions(cloudRaw);
+    if (!localSessions || localSessions.length === 0) return mappedCloud;
+
+    // Track which local sessions were matched to a cloud session
+    const matchedLocalIds = new Set<string>();
+
+    const mergedCloud = mappedCloud.map(cs => {
+      // Find matching local session by cloudId, id, or date + notes + xp
+      const localMatch = localSessions.find(ls => 
+        (ls.cloudId && ls.cloudId === cs.id) ||
+        ls.id === cs.id ||
+        (ls.date === cs.date && ls.xpEarned === cs.xpEarned && (ls.notes === cs.notes || (ls.notes && cs.notes && ls.notes.slice(0, 30) === cs.notes.slice(0, 30))))
+      );
+
+      if (localMatch) {
+        matchedLocalIds.add(localMatch.id);
+        
+        // Critical Fix for Rohit's Timer Bug:
+        // If the local session has a genuine duration (>0) and the cloud session only has default 60 (or missing)
+        // while local is not 60, NEVER clobber the user's logged duration!
+        const resolvedDuration = (localMatch.durationMinutes > 0 && (cs.durationMinutes === 60 || !cs.durationMinutes) && localMatch.durationMinutes !== 60)
+          ? localMatch.durationMinutes
+          : (cs.durationMinutes || localMatch.durationMinutes || 60);
+
+        return {
+          ...cs,
+          id: localMatch.id, // keep local ID stable
+          cloudId: cs.id,
+          durationMinutes: resolvedDuration,
+          startTime: localMatch.startTime || cs.startTime,
+          endTime: localMatch.endTime || cs.endTime,
+          moduleId: localMatch.moduleId !== 'cloud_sync' ? localMatch.moduleId : cs.moduleId,
+          moduleName: localMatch.moduleName !== 'Study Sprint' ? localMatch.moduleName : cs.moduleName,
+          topicName: localMatch.topicName || cs.topicName,
+          exam: localMatch.exam || cs.exam,
+          mood: localMatch.mood || cs.mood,
+          category: localMatch.category || cs.category,
+        };
+      }
+
+      return cs;
+    });
+
+    // Add any unsynced or local-only sessions that don't exist on the cloud yet
+    const localOnly = localSessions.filter(ls => !matchedLocalIds.has(ls.id) && !ls.cloudId);
+
+    // Combine and sort by date descending
+    const combined = [...localOnly, ...mergedCloud];
+    combined.sort((a, b) => {
+      const dateCmp = (b.date || '').localeCompare(a.date || '');
+      if (dateCmp !== 0) return dateCmp;
+      return (b.startTime || '').localeCompare(a.startTime || '');
+    });
+
+    return combined;
   },
 
   async login(username: string, password: string): Promise<{ success: boolean; user?: AuthUser; error?: string }> {
@@ -133,16 +193,13 @@ export const ApiService = {
         StorageService.setDailyXpGoal(data.user.dailyXpGoal);
       }
 
-      // Sync site sessions into device storage while preserving unsynced local sessions
+      // Sync site sessions into device storage using non-destructive reconciliation
       const existingSessions = StorageService.getSessions();
-      const unsynced = existingSessions.filter(s => !s.cloudId && s.id.startsWith('sess-'));
-      if (Array.isArray(data.user.sessions) && data.user.sessions.length > 0) {
-        const mapped = this.mapCloudSessions(data.user.sessions);
-        StorageService.saveSessions([...unsynced, ...mapped]);
+      if (Array.isArray(data.user.sessions)) {
+        const reconciled = this.reconcileSessions(existingSessions, data.user.sessions);
+        StorageService.saveSessions(reconciled);
       }
-      if (unsynced.length > 0) {
-        this.uploadUnsyncedSessions();
-      }
+      this.uploadUnsyncedSessions();
 
       return { success: true, user };
     } catch (err: any) {
@@ -209,9 +266,10 @@ export const ApiService = {
         if (typeof data.user.freezeTokens === 'number') StorageService.setFreezeTokens(data.user.freezeTokens);
         if (typeof data.user.dailyXpGoal === 'number') StorageService.setDailyXpGoal(data.user.dailyXpGoal);
         if (Array.isArray(data.sessions)) {
-          const mapped = this.mapCloudSessions(data.sessions);
-          if (mapped.length > 0) {
-            StorageService.saveSessions(mapped);
+          const existingSessions = StorageService.getSessions();
+          const reconciled = this.reconcileSessions(existingSessions, data.sessions);
+          if (reconciled.length > 0) {
+            StorageService.saveSessions(reconciled);
           }
         }
         return true;
@@ -281,6 +339,8 @@ export const ApiService = {
           xpAwarded: session.xpEarned,
           aiBreakdown: session.aiFeedback,
           durationMinutes: session.durationMinutes,
+          startTime: session.startTime,
+          endTime: session.endTime,
           mood: session.mood
         })
       });

@@ -45,6 +45,7 @@ export interface FreeKeyData {
   key: string;
   provider: string;
   model: string;
+  endpoint?: string;
   label?: string;
   fetchedAt: number;
 }
@@ -377,8 +378,8 @@ export const StorageService = {
       inactivityAlertTime: '20:30',
       streakSaverEnabled: true,
       spacedRevisionAlertEnabled: true,
-      appVersion: 'v1.0.10 (Production)',
-      buildNumber: '2026.10.13-v11',
+      appVersion: 'v1.0.11 (Production)',
+      buildNumber: '2026.10.16-v12',
     };
     if (!saved) return defaults;
     try {

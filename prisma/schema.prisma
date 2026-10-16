@@ -76,6 +76,10 @@ model StudySession {
   title             String?
   rawText           String
   xpAwarded         Int
+  durationMinutes   Int      @default(60)
+  startTime         String?
+  endTime           String?
+  mood              String?
   rawXp             Int
   historicalAvg     Float?
   aiBreakdown       String
@@ -358,8 +362,9 @@ enum KeyStatus {
 model FreeKey {
   id             String    @id @default(cuid())
   key            String
-  provider       String    @default("openrouter") // "openrouter", "gemini", etc.
+  provider       String    @default("openrouter") // "openrouter", "gemini", "huggingface", etc.
   model          String    @default("nvidia/nemotron-3-ultra-550b-a55b:free")
+  endpoint       String?   // e.g. "https://username-space.hf.space/v1/chat/completions"
   label          String?
   isActive       Boolean   @default(true)
   lastUsed       DateTime?

@@ -16,7 +16,19 @@ export async function POST(request: Request) {
     const payload = await verifyAuthToken(token);
     if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { rawText, title, tags, isShared, xpAwarded, aiBreakdown, aiSuggestion } = await request.json();
+    const { 
+      rawText, 
+      title, 
+      tags, 
+      isShared, 
+      xpAwarded, 
+      aiBreakdown, 
+      aiSuggestion,
+      durationMinutes,
+      startTime,
+      endTime,
+      mood
+    } = await request.json();
 
     if (!rawText || rawText.trim().length < 10) {
       return NextResponse.json({ error: 'Session description is too short.' }, { status: 400 });
@@ -87,9 +99,10 @@ ${pastContext}`;
         });
         const orKey = freeKeyRecord?.key || process.env.OPENROUTER_KEY;
         const modelToUse = freeKeyRecord?.model || 'nvidia/nemotron-3-ultra-550b-a55b:free';
+        const endpointToUse = freeKeyRecord?.endpoint || 'https://openrouter.ai/api/v1/chat/completions';
 
         if (orKey) {
-          const orResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          const orResponse = await fetch(endpointToUse, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${orKey}`,
@@ -114,7 +127,8 @@ ${pastContext}`;
             if (content) {
               evaluation = JSON.parse(content);
               if (evaluation && evaluation.aiBreakdown) {
-                evaluation.aiBreakdown = `[⚡ NVIDIA Nemotron 3 Ultra 550B]\n${evaluation.aiBreakdown}`;
+                const label = freeKeyRecord?.label || (freeKeyRecord?.provider === 'huggingface' ? '🌲 Ternary Bonsai 2' : '⚡ NVIDIA Nemotron 3 Ultra 550B');
+                evaluation.aiBreakdown = `[${label}]\n${evaluation.aiBreakdown}`;
               }
               if (freeKeyRecord) {
                 prisma.freeKey.update({
@@ -240,6 +254,10 @@ ${pastContext}`;
       }
     }
 
+    const parsedDuration = typeof durationMinutes === 'number' && durationMinutes > 0 && durationMinutes <= 720
+      ? Math.round(durationMinutes)
+      : 60;
+
     const session = await prisma.studySession.create({
       data: {
         userId: payload.userId as string,
@@ -252,7 +270,11 @@ ${pastContext}`;
         aiBreakdown: evaluation.aiBreakdown,
         aiSuggestion: evaluation.aiSuggestion,
         closestBaseline: evaluation.closestBaseline,
-        confidence: evaluation.confidence || 1.0
+        confidence: evaluation.confidence || 1.0,
+        durationMinutes: parsedDuration,
+        startTime: startTime || null,
+        endTime: endTime || null,
+        mood: mood || null
       }
     });
 

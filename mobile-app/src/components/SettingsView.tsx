@@ -40,6 +40,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [inspectUserId, setInspectUserId] = useState<string | null>(null);
 
   const currentUser = StorageService.getAuthUser();
+  const freeKeyCached = StorageService.getFreeKey();
+  const primaryEngineLabel = freeKeyCached?.label || (freeKeyCached?.provider === 'huggingface' ? 'Ternary Bonsai 2' : 'Nemotron 3 Ultra 550B');
 
   const loadSocialData = async () => {
     if (!currentUser) return;
@@ -212,12 +214,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Primary: Nemotron 3 Ultra 550B</span>
+            <span>Primary: {primaryEngineLabel}</span>
           </span>
         </div>
 
         <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-          <strong className="text-slate-700 dark:text-slate-300">Tier 1: NVIDIA Nemotron 3 Ultra 550B</strong> is built-in and enabled by default for all users. You can optionally add personal Google Gemini or custom OpenRouter keys below as an automatic backup tier if shared limits are reached.
+          <strong className="text-slate-700 dark:text-slate-300">Tier 1: {primaryEngineLabel}</strong> is built-in and enabled by default for all users. You can optionally add personal Google Gemini or custom OpenRouter keys below as an automatic backup tier if shared limits are reached.
         </p>
 
         <div>
