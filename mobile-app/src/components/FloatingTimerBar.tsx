@@ -303,57 +303,63 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
     const startTimeObj = new Date(now.getTime() - durationMinutes * 60000);
     const startTimeStr = startTimeObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // AI Evaluation
-    const evalResult = await GeminiService.evaluateSession({
-      exam,
-      subject: currentModule?.category || 'General',
-      moduleName: currentModule?.name || 'Study Session',
-      topicName: topicName.trim() || undefined,
-      durationMinutes,
-      notes: sessionNotes,
-    });
-
-    const newSession: StudySession = {
-      id: `sess-${Date.now()}`,
-      exam,
-      moduleId: currentModule?.id || 'gen',
-      moduleName: currentModule?.name || 'General Study',
-      topicName: topicName.trim() || undefined,
-      startTime: startTimeStr,
-      endTime: endTimeStr,
-      durationMinutes,
-      xpEarned: evalResult.xp,
-      mood,
-      notes: sessionNotes,
-      aiFeedback: evalResult.feedback,
-      date: now.toISOString().split('T')[0],
-      category: currentModule?.category || 'General',
-      apiError: evalResult.apiError,
-      usedFallback: evalResult.usedFallback,
-      modelUsed: evalResult.modelUsed,
-      isShared
-    };
-
-    onSessionCompleted(newSession);
-    setIsEvaluating(false);
-
-    // Confetti celebration
     try {
-      confetti({ particleCount: 75, spread: 60, origin: { y: 0.8 } });
-      Haptics.impact({ style: ImpactStyle.Medium });
-    } catch {}
+      // AI Evaluation
+      const evalResult = await GeminiService.evaluateSession({
+        exam,
+        subject: currentModule?.category || 'General',
+        moduleName: currentModule?.name || 'Study Session',
+        topicName: topicName.trim() || undefined,
+        durationMinutes,
+        notes: sessionNotes,
+      });
 
-    // Reset timer
-    setIsRunning(false);
-    targetEndTimeRef.current = null;
-    stopwatchStartTimeRef.current = null;
-    NotificationService.cancelPomodoroAlert();
-    localStorage.removeItem('sf_timer_state');
-    setSecondsLeft(pomodoroTargetSeconds);
-    setElapsedSeconds(0);
-    setSessionNotes('');
-    setTopicName('');
-    setShowCompleteModal(false);
+      const newSession: StudySession = {
+        id: `sess-${Date.now()}`,
+        exam,
+        moduleId: currentModule?.id || 'gen',
+        moduleName: currentModule?.name || 'General Study',
+        topicName: topicName.trim() || undefined,
+        startTime: startTimeStr,
+        endTime: endTimeStr,
+        durationMinutes,
+        xpEarned: evalResult.xp,
+        mood,
+        notes: sessionNotes,
+        aiFeedback: evalResult.feedback,
+        date: now.toISOString().split('T')[0],
+        category: currentModule?.category || 'General',
+        apiError: evalResult.apiError,
+        usedFallback: evalResult.usedFallback,
+        modelUsed: evalResult.modelUsed,
+        isShared
+      };
+
+      onSessionCompleted(newSession);
+
+      // Confetti celebration
+      try {
+        confetti({ particleCount: 75, spread: 60, origin: { y: 0.8 } });
+        Haptics.impact({ style: ImpactStyle.Medium });
+      } catch {}
+
+      // Reset timer
+      setIsRunning(false);
+      targetEndTimeRef.current = null;
+      stopwatchStartTimeRef.current = null;
+      NotificationService.cancelPomodoroAlert();
+      localStorage.removeItem('sf_timer_state');
+      setSecondsLeft(pomodoroTargetSeconds);
+      setElapsedSeconds(0);
+      setSessionNotes('');
+      setTopicName('');
+      setShowCompleteModal(false);
+    } catch (err: any) {
+      console.warn('FloatingTimerBar save error:', err);
+      setShowCompleteModal(false);
+    } finally {
+      setIsEvaluating(false);
+    }
   };
 
   const handleAdjustTime = (deltaMinutes: number) => {

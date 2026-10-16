@@ -226,6 +226,39 @@ export const GeminiService = {
     durationMinutes: number;
     notes: string;
   }): Promise<SessionEvaluationResult> {
+    const hardTimeoutPromise = new Promise<SessionEvaluationResult>((resolve) => {
+      setTimeout(() => {
+        const noteLen = (params.notes || '').trim().length;
+        let contentXp = 50;
+        if (noteLen > 150) contentXp = 85;
+        else if (noteLen > 60) contentXp = 75;
+        else if (noteLen > 20) contentXp = 60;
+        resolve({
+          xp: contentXp,
+          depthScore: noteLen > 30 ? 8 : 7,
+          difficultyScore: 7,
+          feedback: `[⚡ StudyForge Fast Engine]\n\nSolid focus sprint on ${params.moduleName}. Consistent effort compounds into mastery!`,
+          keyUsed: 'Fast Academic Engine',
+          modelUsed: 'StudyForge Fast Engine',
+          usedFallback: true
+        });
+      }, 4200); // 4.2-second absolute hard ceiling: NEVER leaves button stuck
+    });
+
+    return Promise.race([
+      this._executeEvaluation(params),
+      hardTimeoutPromise
+    ]);
+  },
+
+  async _executeEvaluation(params: {
+    exam: string;
+    subject: string;
+    moduleName: string;
+    topicName?: string;
+    durationMinutes: number;
+    notes: string;
+  }): Promise<SessionEvaluationResult> {
     const prompt = `You are the StudyForge AI Academic Evaluator for competitive exams (${params.exam}).
 Evaluate this student study session based strictly on the CONTENT, depth, difficulty, and conceptual coverage described:
 - Subject / Module: ${params.moduleName}
@@ -243,22 +276,61 @@ Return ONLY valid JSON.`;
 
     let primaryFailureReason = '';
 
-    // TIER 1: First try Built-in Free Key engine (Ternary Bonsai 2 or NVIDIA Nemotron loaded from DB)
+    // TIER 0: Try StudyForge Backend Fast Server Evaluator first!
+    // The server has a high-speed direct datacenter connection to Groq (~800ms),
+    // eliminates mobile WebView CORS/DNS failures, and hides API keys.
+    try {
+      const serverController = new AbortController();
+      const serverTimeout = setTimeout(() => serverController.abort(), 3500);
+
+      const serverRes = await fetch('https://study-forge-five-pi.vercel.app/api/ai/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exam: params.exam,
+          moduleName: params.moduleName,
+          topicName: params.topicName,
+          notes: params.notes,
+          durationMinutes: params.durationMinutes,
+        }),
+        signal: serverController.signal
+      });
+
+      clearTimeout(serverTimeout);
+
+      if (serverRes.ok) {
+        const serverData = await serverRes.json();
+        if (serverData.success && serverData.evaluation) {
+          return serverData.evaluation;
+        }
+      }
+    } catch (err: any) {
+      console.warn('[StudyForge AI] Server evaluator unavailable, trying direct:', err?.message);
+    }
+
+    // TIER 1: Try Direct Built-in Free Key engine (Groq / Nemotron)
     const freeKeyObj = await this.getOrFetchFreeKey();
     if (freeKeyObj && freeKeyObj.key) {
       const targetEndpoint = freeKeyObj.endpoint || OPENROUTER_CONFIG.endpoint;
       const targetModel = freeKeyObj.model || OPENROUTER_CONFIG.defaultModel;
-      const targetLabel = freeKeyObj.label || (freeKeyObj.provider === 'huggingface' ? '🌲 Ternary Bonsai 2' : '⚡ NVIDIA Nemotron 3 Ultra 550B');
+      const targetLabel = freeKeyObj.label || (freeKeyObj.provider === 'groq' ? '⚡ Groq GPT OSS 120B' : '⚡ NVIDIA Nemotron 3 Ultra 550B');
 
       try {
+        const directController = new AbortController();
+        const directTimeout = setTimeout(() => directController.abort(), 3500);
+
+        const reqHeaders: Record<string, string> = {
+          'Authorization': `Bearer ${freeKeyObj.key}`,
+          'Content-Type': 'application/json'
+        };
+        if (targetEndpoint.includes('openrouter.ai')) {
+          reqHeaders['HTTP-Referer'] = OPENROUTER_CONFIG.siteUrl;
+          reqHeaders['X-Title'] = OPENROUTER_CONFIG.siteName;
+        }
+
         const orResponse = await fetch(targetEndpoint, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${freeKeyObj.key}`,
-            'HTTP-Referer': OPENROUTER_CONFIG.siteUrl,
-            'X-Title': OPENROUTER_CONFIG.siteName,
-            'Content-Type': 'application/json'
-          },
+          headers: reqHeaders,
           body: JSON.stringify({
             model: targetModel,
             messages: [
@@ -273,8 +345,11 @@ Return ONLY valid JSON.`;
             ],
             response_format: { type: 'json_object' },
             temperature: 0.2
-          })
+          }),
+          signal: directController.signal
         });
+
+        clearTimeout(directTimeout);
 
         if (orResponse.ok) {
           const orData = await orResponse.json();

@@ -91,11 +91,11 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
       setNotes('');
       setTopicName('');
       setDurationMinutes(30);
-      setIsEvaluating(false);
       onClose();
     } catch (err: any) {
-      setIsEvaluating(false);
       setError(err?.message || 'Error evaluating session. Saved offline.');
+    } finally {
+      setIsEvaluating(false);
     }
   };
 
@@ -311,8 +311,7 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              disabled={isEvaluating}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors active:scale-95"
             >
               Cancel
             </button>
