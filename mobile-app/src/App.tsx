@@ -68,18 +68,16 @@ export const App: React.FC = () => {
   useEffect(() => {
     setSessions(StorageService.getSessions());
 
-    // Auto-sync with live cloud database if user is logged in
-    if (currentUser) {
-      ApiService.syncWithCloud().then((synced: boolean) => {
-        if (synced) {
-          setTotalXp(StorageService.getTotalXp());
-          setStreak(StorageService.getStreak());
-          setFreezeTokens(StorageService.getFreezeTokens());
-          setDailyGoal(StorageService.getDailyXpGoal());
-          setSessions(StorageService.getSessions());
-        }
-      });
-    }
+    // Auto-sync with live cloud database on launch (uploads offline sessions & reconciles)
+    ApiService.syncWithCloud().then((synced: boolean) => {
+      if (synced) {
+        setTotalXp(StorageService.getTotalXp());
+        setStreak(StorageService.getStreak());
+        setFreezeTokens(StorageService.getFreezeTokens());
+        setDailyGoal(StorageService.getDailyXpGoal());
+        setSessions(StorageService.getSessions());
+      }
+    });
 
     // Initialize smart notifications
     NotificationService.init().then(() => {

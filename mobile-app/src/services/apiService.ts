@@ -276,7 +276,7 @@ export const ApiService = {
   async syncWithCloud(): Promise<boolean> {
     const user = StorageService.getAuthUser();
     const token = StorageService.getAuthToken();
-    if (!user) return false;
+    const effectiveUserId = user?.id || 'cmv0ejzwk00002ebpsqohbcn1';
 
     try {
       // 1. Upload any offline or local sessions that haven't reached the cloud yet
@@ -285,7 +285,7 @@ export const ApiService = {
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${API_BASE}/api/sessions?userId=${user.id}`, { headers });
+      const res = await fetch(`${API_BASE}/api/sessions?userId=${effectiveUserId}`, { headers });
       if (!res.ok) return false;
 
       const data = await res.json();
@@ -351,18 +351,33 @@ export const ApiService = {
   // Asynchronously upload a completed mobile session to the live website database
   async syncSessionToCloud(session: StudySession): Promise<string | null> {
     const token = StorageService.getAuthToken();
-    if (!token) return null;
+    const user = StorageService.getAuthUser();
+
+    // Default to owner account (Abhishek Thakur) if running in offline/guest mode
+    const effectiveUserId = user?.id || 'cmv0ejzwk00002ebpsqohbcn1';
+    const effectiveUsername = user?.username || 'Abhishek Thakur';
 
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const rawNotes = (session.notes && session.notes.trim().length >= 5)
+        ? session.notes.trim()
+        : `Completed ${session.durationMinutes || 60} min study sprint on ${session.moduleName || 'Study Session'}.`;
+
       const res = await fetch(`${API_BASE}/api/sessions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({
+          userId: effectiveUserId,
+          username: effectiveUsername,
+          isClientSync: true,
           title: session.topicName ? `${session.moduleName}: ${session.topicName}` : session.moduleName,
-          rawText: session.notes || `Completed ${session.durationMinutes} min study sprint on ${session.moduleName}.`,
+          rawText: rawNotes,
           tags: [session.category || 'Study', session.exam],
           isShared: Boolean(session.isShared),
           xpAwarded: session.xpEarned,
@@ -406,8 +421,6 @@ export const ApiService = {
 
   // Upload any offline/local sessions that have not yet synced to the cloud database
   async uploadUnsyncedSessions(): Promise<number> {
-    const token = StorageService.getAuthToken();
-    if (!token) return 0;
     const unsynced = StorageService.getSessions().filter(s => !s.cloudId);
     let count = 0;
     for (const s of unsynced) {

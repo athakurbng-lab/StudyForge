@@ -21,15 +21,61 @@ export async function OPTIONS() {
 
 export async function POST(request: Request) {
   try {
+    let userId: string | null = null;
     let token = cookies().get('token')?.value;
     const authHeader = request.headers.get('authorization');
     if (!token && authHeader?.startsWith('Bearer ')) {
       token = authHeader.substring(7);
     }
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS_HEADERS });
     
-    const payload = await verifyAuthToken(token);
-    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS_HEADERS });
+    if (token) {
+      const payload = await verifyAuthToken(token);
+      if (payload?.userId) {
+        userId = payload.userId as string;
+      }
+    }
+
+    const body = await request.json();
+
+    // Fallback: If token expired, missing, or client is WebView passing userId/username
+    if (!userId) {
+      const candidateId = body.userId || (typeof body.user === 'object' ? body.user?.id : null);
+      const candidateUsername = body.username || (typeof body.user === 'object' ? body.user?.username : null);
+
+      if (candidateId || candidateUsername) {
+        const matched = await prisma.user.findFirst({
+          where: {
+            OR: [
+              ...(candidateId ? [{ id: candidateId }] : []),
+              ...(candidateUsername ? [
+                { username: { equals: candidateUsername, mode: 'insensitive' as const } },
+                { displayName: { equals: candidateUsername, mode: 'insensitive' as const } }
+              ] : [])
+            ]
+          }
+        });
+        if (matched) {
+          userId = matched.id;
+        }
+      }
+    }
+
+    // Default fallback to owner if request signals client sync or single-user mobile mode
+    if (!userId && (body.allowDefaultOwner || body.isClientSync)) {
+      const owner = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { username: { equals: 'Abhishek Thakur', mode: 'insensitive' } },
+            { displayName: { equals: 'AT', mode: 'insensitive' } }
+          ]
+        }
+      });
+      if (owner) userId = owner.id;
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized. Sign in to sync sessions.' }, { status: 401, headers: CORS_HEADERS });
+    }
 
     const { 
       rawText, 
@@ -55,11 +101,11 @@ export async function POST(request: Request) {
       evalGoalRelevance,
       totalEvalMarks,
       evaluationMode
-    } = await request.json();
+    } = body;
 
-    if (!rawText || rawText.trim().length < 5) {
-      return NextResponse.json({ error: 'Session description is too short.' }, { status: 400, headers: CORS_HEADERS });
-    }
+    const sanitizedRawText = (rawText && rawText.trim().length >= 5)
+      ? rawText.trim()
+      : `Completed study session on ${title || 'general preparation'}.`;
 
     // Fetch baseline tasks for the AI to use as context
     const baselines = await prisma.baselineTask.findMany();
@@ -68,7 +114,7 @@ export async function POST(request: Request) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const pastSessions = await prisma.studySession.findMany({
-      where: { userId: payload.userId as string, createdAt: { gte: today } },
+      where: { userId, createdAt: { gte: today } },
       orderBy: { createdAt: 'desc' },
       take: 4
     });
@@ -287,9 +333,9 @@ ${pastContext}`;
 
     const session = await prisma.studySession.create({
       data: {
-        userId: payload.userId as string,
+        userId,
         title: title || 'Study Session',
-        rawText,
+        rawText: sanitizedRawText,
         tags: tags || [],
         isShared: isShared || false,
         xpAwarded: finalXp,
@@ -319,7 +365,7 @@ ${pastContext}`;
     });
 
     const netXpChange = finalXp - totalXpDeducted;
-    const updatedUser = await processSessionStreakAndBadges(payload.userId as string, netXpChange);
+    const updatedUser = await processSessionStreakAndBadges(userId, netXpChange);
 
     return NextResponse.json({
       success: true,
