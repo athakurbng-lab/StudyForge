@@ -279,6 +279,9 @@ export const ApiService = {
     if (!user) return false;
 
     try {
+      // 1. Upload any offline or local sessions that haven't reached the cloud yet
+      await this.uploadUnsyncedSessions();
+
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -402,13 +405,18 @@ export const ApiService = {
   },
 
   // Upload any offline/local sessions that have not yet synced to the cloud database
-  async uploadUnsyncedSessions(): Promise<void> {
+  async uploadUnsyncedSessions(): Promise<number> {
     const token = StorageService.getAuthToken();
-    if (!token) return;
-    const unsynced = StorageService.getSessions().filter(s => !s.cloudId && s.id.startsWith('sess-'));
+    if (!token) return 0;
+    const unsynced = StorageService.getSessions().filter(s => !s.cloudId);
+    let count = 0;
     for (const s of unsynced) {
-      await this.syncSessionToCloud(s);
+      const cloudId = await this.syncSessionToCloud(s);
+      if (cloudId) {
+        count++;
+      }
     }
+    return count;
   },
 
   async getGroups(forceRefresh = false): Promise<GroupItem[]> {

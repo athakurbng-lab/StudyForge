@@ -4,6 +4,21 @@ import { verifyAuthToken } from '@/app/lib/auth';
 import { cookies } from 'next/headers';
 import { processSessionStreakAndBadges } from '@/app/lib/streak';
 
+export const dynamic = 'force-dynamic';
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+}
+
 export async function POST(request: Request) {
   try {
     let token = cookies().get('token')?.value;
@@ -11,10 +26,10 @@ export async function POST(request: Request) {
     if (!token && authHeader?.startsWith('Bearer ')) {
       token = authHeader.substring(7);
     }
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS_HEADERS });
     
     const payload = await verifyAuthToken(token);
-    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS_HEADERS });
 
     const { 
       rawText, 
@@ -43,7 +58,7 @@ export async function POST(request: Request) {
     } = await request.json();
 
     if (!rawText || rawText.trim().length < 5) {
-      return NextResponse.json({ error: 'Session description is too short.' }, { status: 400 });
+      return NextResponse.json({ error: 'Session description is too short.' }, { status: 400, headers: CORS_HEADERS });
     }
 
     // Fetch baseline tasks for the AI to use as context
@@ -314,10 +329,10 @@ ${pastContext}`;
         streak: updatedUser?.streak,
         freezeTokens: updatedUser?.freezeTokens
       }
-    });
+    }, { headers: CORS_HEADERS });
   } catch (error) {
     console.error('Session logging error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: CORS_HEADERS });
   }
 }
 
@@ -342,7 +357,7 @@ export async function GET(request: Request) {
     }
 
     if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized. Provide token or userId.' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized. Provide token or userId.' }, { status: 401, headers: CORS_HEADERS });
     }
 
     const user = await prisma.user.findUnique({
@@ -363,7 +378,7 @@ export async function GET(request: Request) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return NextResponse.json({ error: 'User not found' }, { status: 404, headers: CORS_HEADERS });
     }
 
     return NextResponse.json({
@@ -378,10 +393,11 @@ export async function GET(request: Request) {
         dailyXpGoal: user.dailyXpGoal,
       },
       sessions: user.studySessions
-    });
+    }, { headers: CORS_HEADERS });
   } catch (error) {
     console.error('Fetch sessions error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: CORS_HEADERS });
   }
 }
+
 

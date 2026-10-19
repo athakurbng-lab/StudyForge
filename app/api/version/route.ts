@@ -17,20 +17,20 @@ export async function OPTIONS() {
 
 export async function GET() {
   const versionData = {
-    version: "1.0.14",
-    versionCode: 15,
+    version: "1.0.15",
+    versionCode: 16,
     releaseDate: "2026-10-19",
     minSupportedVersion: "1.0.0",
     changelog: [
-      "👥 Friend & Self Profile Access: Full study profile & session log viewer directly from avatar, settings, and group leaderboards",
-      "🌐 Cross-Origin & Preflight Fix: Added explicit CORS & OPTIONS support to user profile, watcher, and access request endpoints",
-      "🔍 Case-Insensitive User Search: Friend search and watcher requests now effortlessly match usernames and display names regardless of casing",
-      "⚡ Enhanced Group Leaderboard: Entire leaderboard row is now clickable to seamlessly inspect friends' study history"
+      "🔄 Instant Local Storage Cloud Sync: Automatically pushes all offline & unsynced study sessions to live database",
+      "🌐 Universal Session API CORS: Added CORS & OPTIONS preflight support to /api/sessions and /api/user/goal",
+      "📦 Offline Session Diagnostics: Settings view now shows pending sync counts, 1-tap manual sync & JSON backup tool",
+      "⚡ Enhanced Auth Modal: Direct count and visual banner for offline sessions waiting to sync"
     ],
-    downloadUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.14.apk",
-    githubUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.14.apk",
+    downloadUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.15.apk",
+    githubUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.15.apk",
     fileSizeMb: 4.1,
-    sha256: "6985c0577b0a0dcb328fa57797563ea815ef5dfcda257c09ea4c867dea11ffaa"
+    sha256: "792178431490d1e60d30d5e4bf1eddc9c5480b60d764f88c8bdf06aa77acd5ef"
   };
 
   return NextResponse.json(versionData, {

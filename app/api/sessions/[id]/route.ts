@@ -3,6 +3,21 @@ import prisma from '@/app/lib/prisma';
 import { verifyAuthToken } from '@/app/lib/auth';
 import { cookies } from 'next/headers';
 
+export const dynamic = 'force-dynamic';
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, PATCH, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
+}
+
 async function getAuthPayload(request: Request) {
   let token = cookies().get('token')?.value;
   const authHeader = request.headers.get('authorization');
@@ -16,7 +31,7 @@ async function getAuthPayload(request: Request) {
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const payload = await getAuthPayload(request);
-    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS_HEADERS });
 
     const session = await prisma.studySession.findUnique({
       where: { id: params.id },
@@ -25,7 +40,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
       }
     });
 
-    if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+    if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404, headers: CORS_HEADERS });
 
     const isOwner = session.userId === payload.userId;
     let hasAccess = isOwner || session.isShared;
@@ -68,7 +83,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
           createdAt: session.createdAt,
           user: session.user
         }
-      });
+      }, { headers: CORS_HEADERS });
     }
 
     return NextResponse.json({
@@ -78,23 +93,23 @@ export async function GET(request: Request, { params }: { params: { id: string }
         hasAccess: true,
         isOwner
       }
-    });
+    }, { headers: CORS_HEADERS });
   } catch (error) {
     console.error('Get session error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: CORS_HEADERS });
   }
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   try {
     const payload = await getAuthPayload(request);
-    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS_HEADERS });
 
     const body = await request.json();
     const session = await prisma.studySession.findUnique({ where: { id: params.id } });
 
-    if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (session.userId !== payload.userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404, headers: CORS_HEADERS });
+    if (session.userId !== payload.userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: CORS_HEADERS });
 
     const isShared = typeof body.isShared === 'boolean' ? body.isShared : !session.isShared;
 
@@ -103,24 +118,24 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       data: { isShared }
     });
 
-    return NextResponse.json({ success: true, session: updated });
+    return NextResponse.json({ success: true, session: updated }, { headers: CORS_HEADERS });
   } catch (error) {
     console.error('Update session error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: CORS_HEADERS });
   }
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
     const payload = await getAuthPayload(request);
-    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS_HEADERS });
 
     const session = await prisma.studySession.findUnique({
       where: { id: params.id }
     });
 
-    if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (session.userId !== payload.userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404, headers: CORS_HEADERS });
+    if (session.userId !== payload.userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: CORS_HEADERS });
 
     // Deduct the XP from the user
     await prisma.user.update({
@@ -132,9 +147,9 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       where: { id: params.id }
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, { headers: CORS_HEADERS });
   } catch (error) {
     console.error('Delete session error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: CORS_HEADERS });
   }
 }

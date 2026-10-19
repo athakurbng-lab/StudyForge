@@ -103,6 +103,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <p className="text-xs text-rose-500 font-semibold">{error}</p>
             )}
 
+            {StorageService.getSessions().filter(s => !s.cloudId).length > 0 && (
+              <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  <span className="font-semibold">{StorageService.getSessions().filter(s => !s.cloudId).length} local session(s) pending cloud sync</span>
+                </div>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={() => {
@@ -120,11 +129,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               onClick={async () => {
                 setLoading(true);
                 setError(null);
+                const uploaded = await ApiService.uploadUnsyncedSessions();
                 const ok = await ApiService.syncWithCloud();
                 setLoading(false);
                 if (ok) {
                   onUserChanged(currentUser);
-                  setSuccessMsg('Synchronized latest data from site database!');
+                  setSuccessMsg(uploaded > 0
+                    ? `Uploaded ${uploaded} offline session(s) & synchronized latest data!`
+                    : 'Synchronized latest data from site database!');
                 } else {
                   setError('Failed to sync. Check network connection.');
                 }

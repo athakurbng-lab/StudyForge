@@ -39,6 +39,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isAddingWatcher, setIsAddingWatcher] = useState<boolean>(false);
   const [inspectUserId, setInspectUserId] = useState<string | null>(null);
 
+  const [isSyncingStorage, setIsSyncingStorage] = useState(false);
+  const [storageSyncMsg, setStorageSyncMsg] = useState<string | null>(null);
+  const [copiedJson, setCopiedJson] = useState(false);
+
   const currentUser = StorageService.getAuthUser();
   const freeKeyCached = StorageService.getFreeKey();
   const primaryEngineLabel = freeKeyCached?.label || (freeKeyCached?.provider === 'huggingface' ? 'Ternary Bonsai 2' : 'Nemotron 3 Ultra 550B');
@@ -639,7 +643,87 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         )}
       </div>
 
-      {/* 5. App Version Details Card */}
+      {/* 5. Local Storage & Cloud Sync Diagnostics */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 text-emerald-500" />
+            <h3 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
+              Local Storage & Cloud Sync
+            </h3>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+            {StorageService.getSessions().length} Total Sessions
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold">Synced with Cloud</span>
+            <div className="font-bold text-emerald-600 dark:text-emerald-400">
+              {StorageService.getSessions().filter(s => s.cloudId).length} sessions
+            </div>
+          </div>
+          <div className="p-2.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
+            <span className="text-[10px] text-slate-400 uppercase font-semibold">Pending Cloud Sync</span>
+            <div className={`font-bold ${StorageService.getSessions().filter(s => !s.cloudId).length > 0 ? 'text-amber-500 font-black' : 'text-slate-500 dark:text-slate-400'}`}>
+              {StorageService.getSessions().filter(s => !s.cloudId).length} sessions
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 pt-1">
+          <button
+            onClick={async () => {
+              setIsSyncingStorage(true);
+              setStorageSyncMsg(null);
+              try {
+                const uploaded = await ApiService.uploadUnsyncedSessions();
+                const ok = await ApiService.syncWithCloud();
+                if (ok) {
+                  setStorageSyncMsg(uploaded > 0
+                    ? `Uploaded ${uploaded} offline session(s) and synced with cloud database!`
+                    : 'All local sessions are already synchronized with cloud database!');
+                } else {
+                  setStorageSyncMsg(currentUser ? 'Sync failed. Please check network connection.' : 'Please sign in to upload sessions to cloud.');
+                }
+              } catch (e: any) {
+                setStorageSyncMsg(`Error syncing: ${e.message}`);
+              } finally {
+                setIsSyncingStorage(false);
+              }
+            }}
+            disabled={isSyncingStorage}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl shadow-xs transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingStorage ? 'animate-spin' : ''}`} />
+            <span>{isSyncingStorage ? 'Uploading & Syncing...' : 'Upload & Sync Offline Sessions to Cloud'}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              try {
+                const json = localStorage.getItem('studyforge_sessions') || '[]';
+                navigator.clipboard.writeText(json);
+                setCopiedJson(true);
+                setTimeout(() => setCopiedJson(false), 2500);
+              } catch {}
+            }}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl transition-all"
+          >
+            {copiedJson ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Eye className="w-3.5 h-3.5 text-slate-400" />}
+            <span>{copiedJson ? 'Copied Sessions JSON to Clipboard!' : 'Copy Local Sessions JSON (Backup)'}</span>
+          </button>
+
+          {storageSyncMsg && (
+            <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-xl text-center">
+              {storageSyncMsg}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* 6. App Version Details Card */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs space-y-2.5">
         <div className="flex items-center gap-2">
           <Info className="w-4 h-4 text-slate-500" />
