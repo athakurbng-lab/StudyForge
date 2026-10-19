@@ -91,16 +91,74 @@ const STORAGE_KEYS = {
 const DEFAULT_SESSIONS: StudySession[] = [];
 
 export const StorageService = {
-  // One-time startup sanitizer to ensure 0 mock or pre-filled data and normalize arbitrary hours to flat 1hr
+  // Deduplicate sessions list to prevent duplicate entries across local storage and cloud sync
+  deduplicateSessions(list: StudySession[]): StudySession[] {
+    if (!Array.isArray(list) || list.length <= 1) return list || [];
+
+    const result: StudySession[] = [];
+    const seenCloudIds = new Set<string>();
+    const seenLocalIds = new Set<string>();
+    const seenFuzzyKeys = new Set<string>();
+
+    for (const s of list) {
+      if (!s) continue;
+
+      // 1. Direct Cloud ID match
+      if (s.cloudId) {
+        if (seenCloudIds.has(s.cloudId)) {
+          continue;
+        }
+        seenCloudIds.add(s.cloudId);
+      }
+
+      // 2. Direct Local ID match
+      if (s.id) {
+        if (seenLocalIds.has(s.id)) {
+          continue;
+        }
+        seenLocalIds.add(s.id);
+      }
+
+      // 3. Content-based Fuzzy Match (same date, duration, module/topic, and notes prefix)
+      const normDate = s.date || '';
+      const normDur = s.durationMinutes || 60;
+      const normMod = (s.moduleName || s.topicName || '').trim().toLowerCase();
+      const normNotes = (s.notes || '').trim().slice(0, 30).toLowerCase();
+      const fuzzyKey = `${normDate}_${normDur}_${normMod}_${normNotes}`;
+
+      if (fuzzyKey.length > 10 && seenFuzzyKeys.has(fuzzyKey)) {
+        // If this duplicate session has cloudId and the kept one didn't, attach cloudId to kept session
+        if (s.cloudId) {
+          const existing = result.find(r => 
+            `${r.date || ''}_${r.durationMinutes || 60}_${(r.moduleName || r.topicName || '').trim().toLowerCase()}_${(r.notes || '').trim().slice(0, 30).toLowerCase()}` === fuzzyKey
+          );
+          if (existing && !existing.cloudId) {
+            existing.cloudId = s.cloudId;
+          }
+        }
+        continue;
+      }
+
+      if (fuzzyKey.length > 10) {
+        seenFuzzyKeys.add(fuzzyKey);
+      }
+
+      result.push(s);
+    }
+
+    return result;
+  },
+
+  // One-time startup sanitizer to clean mock data and deduplicate any local storage sessions
   sanitizeStorage(): void {
-    const SANITIZER_KEY = 'studyforge_clean_v6';
+    const SANITIZER_KEY = 'studyforge_clean_v18';
     if (localStorage.getItem(SANITIZER_KEY) !== 'true') {
       const sessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
       if (sessions) {
         try {
           const list = JSON.parse(sessions);
           if (Array.isArray(list)) {
-            // Filter out any mock/template sessions from earlier test builds and normalize durations to flat 60 min if unreasonable
+            // Filter out mock sessions, normalize durations, and deduplicate
             const genuine = list
               .filter((s: any) => !/^sess-[1-9]$/.test(s.id))
               .map((s: any) => ({
@@ -109,13 +167,20 @@ export const StorageService = {
                   ? s.durationMinutes
                   : 60
               }));
-            if (genuine.length === 0) {
+            const deduplicated = this.deduplicateSessions(genuine);
+            if (deduplicated.length === 0) {
               localStorage.removeItem(STORAGE_KEYS.SESSIONS);
               localStorage.setItem(STORAGE_KEYS.TOTAL_XP, '0');
               localStorage.setItem(STORAGE_KEYS.STREAK, '0');
               localStorage.setItem(STORAGE_KEYS.FREEZE_TOKENS, '0');
             } else {
-              localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(genuine));
+              localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(deduplicated));
+              // Calculate genuine XP
+              const genuineXp = deduplicated.reduce((acc, s) => acc + (s.xpEarned || 0), 0);
+              const currentXp = parseInt(localStorage.getItem(STORAGE_KEYS.TOTAL_XP) || '0', 10);
+              if (currentXp > genuineXp) {
+                localStorage.setItem(STORAGE_KEYS.TOTAL_XP, genuineXp.toString());
+              }
             }
           }
         } catch {
@@ -243,7 +308,8 @@ export const StorageService = {
 
   // Sessions
   saveSessions(sessions: StudySession[]): void {
-    localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions));
+    const deduped = this.deduplicateSessions(sessions);
+    localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(deduped));
   },
 
   getSessions(): StudySession[] {
@@ -252,7 +318,7 @@ export const StorageService = {
     try {
       const list = JSON.parse(saved);
       if (Array.isArray(list)) {
-        return list
+        const genuine = list
           .filter(s => !/^sess-[1-9]$/.test(s.id))
           .map(s => ({
             ...s,
@@ -260,6 +326,7 @@ export const StorageService = {
               ? s.durationMinutes
               : 60
           }));
+        return this.deduplicateSessions(genuine);
       }
       return [];
     } catch {
@@ -269,8 +336,24 @@ export const StorageService = {
 
   addSession(session: StudySession): void {
     const list = this.getSessions();
+    // Guard against adding duplicates
+    const isDup = list.some(s => 
+      (s.cloudId && session.cloudId && s.cloudId === session.cloudId) ||
+      s.id === session.id ||
+      (
+        s.date === session.date && 
+        s.durationMinutes === session.durationMinutes &&
+        (s.moduleName === session.moduleName || s.topicName === session.topicName) &&
+        (s.notes && session.notes && s.notes.trim().slice(0, 30) === session.notes.trim().slice(0, 30))
+      )
+    );
+    if (isDup) {
+      console.warn('Prevented duplicate session addition:', session.id);
+      return;
+    }
+
     list.unshift(session);
-    localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(list));
+    this.saveSessions(list);
 
     // Update total XP
     const currentXp = this.getTotalXp();
@@ -282,7 +365,7 @@ export const StorageService = {
     const target = list.find(s => s.id === localId);
     if (target) {
       target.cloudId = cloudId;
-      localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(list));
+      this.saveSessions(list);
     }
   },
 
@@ -402,8 +485,8 @@ export const StorageService = {
       inactivityAlertTime: '20:30',
       streakSaverEnabled: true,
       spacedRevisionAlertEnabled: true,
-      appVersion: 'v1.0.16 (Production)',
-      buildNumber: '2026.10.19-v17',
+      appVersion: 'v1.0.17 (Production)',
+      buildNumber: '2026.10.20-v18',
     };
     if (!saved) return defaults;
     try {

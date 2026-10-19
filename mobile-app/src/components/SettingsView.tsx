@@ -678,8 +678,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               setIsSyncingStorage(true);
               setStorageSyncMsg(null);
               try {
-                const uploaded = await ApiService.uploadUnsyncedSessions();
+                const initialPending = StorageService.getSessions().filter(s => !s.cloudId).length;
                 const ok = await ApiService.syncWithCloud();
+                const remainingPending = StorageService.getSessions().filter(s => !s.cloudId).length;
+                const uploaded = Math.max(0, initialPending - remainingPending);
                 if (ok) {
                   setStorageSyncMsg(uploaded > 0
                     ? `Uploaded ${uploaded} offline session(s) and synced with cloud database!`

@@ -331,6 +331,41 @@ ${pastContext}`;
       ? Math.round(durationMinutes)
       : 60;
 
+    // Idempotency & Duplicate Prevention:
+    // Check if an identical session has already been recorded for this user within the last 24 hours
+    const recentWindow = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const existingSession = await prisma.studySession.findFirst({
+      where: {
+        userId,
+        title: title || 'Study Session',
+        durationMinutes: parsedDuration,
+        OR: [
+          { rawText: sanitizedRawText, createdAt: { gte: recentWindow } },
+          ...(startTime ? [{ startTime, createdAt: { gte: recentWindow } }] : [])
+        ]
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (existingSession) {
+      console.log(`[Idempotent Sync] Session already exists for user ${userId} (id: ${existingSession.id}). Returning existing session without duplicate creation.`);
+      const currentUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { totalXP: true, streak: true, freezeTokens: true, dailyXpGoal: true }
+      });
+
+      return NextResponse.json({
+        success: true,
+        session: existingSession,
+        user: {
+          totalXP: currentUser?.totalXP,
+          streak: currentUser?.streak,
+          freezeTokens: currentUser?.freezeTokens
+        },
+        isDuplicate: true
+      }, { headers: CORS_HEADERS });
+    }
+
     const session = await prisma.studySession.create({
       data: {
         userId,

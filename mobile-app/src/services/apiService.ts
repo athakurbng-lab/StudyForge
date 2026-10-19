@@ -54,6 +54,9 @@ export interface GroupChatMessage {
   };
 }
 
+let isSyncInProgress = false;
+const inFlightUploads = new Set<string>();
+
 export const ApiService = {
   // Map site study sessions to mobile format
   mapCloudSessions(rawSessions: any[]): StudySession[] {
@@ -105,25 +108,42 @@ export const ApiService = {
     });
   },
 
-  // Non-destructive reconciliation between local on-device sessions and cloud records
+  // Non-destructive reconciliation between local on-device sessions and cloud records with strict deduplication
   reconcileSessions(localSessions: StudySession[], cloudRaw: any[]): StudySession[] {
     const mappedCloud = this.mapCloudSessions(cloudRaw);
-    if (!localSessions || localSessions.length === 0) return mappedCloud;
+    if (!localSessions || localSessions.length === 0) {
+      return StorageService.deduplicateSessions(mappedCloud);
+    }
 
-    // Track which local sessions were matched to a cloud session
+    // 1. Deduplicate cloud list first to avoid processing duplicate server entries
+    const cleanCloud = StorageService.deduplicateSessions(mappedCloud);
+
+    // Track which local sessions were matched to a cloud session (1-to-1 match only)
     const matchedLocalIds = new Set<string>();
+    const mergedCloud: StudySession[] = [];
 
-    const mergedCloud = mappedCloud.map(cs => {
-      // Find matching local session by cloudId, id, or date + notes + xp
+    for (const cs of cleanCloud) {
+      // Find matching local session that has NOT been claimed yet
       const localMatch = localSessions.find(ls => 
-        (ls.cloudId && ls.cloudId === cs.id) ||
-        ls.id === cs.id ||
-        (ls.date === cs.date && ls.xpEarned === cs.xpEarned && (ls.notes === cs.notes || (ls.notes && cs.notes && ls.notes.slice(0, 30) === cs.notes.slice(0, 30))))
+        !matchedLocalIds.has(ls.id) && (
+          (ls.cloudId && ls.cloudId === cs.id) ||
+          ls.id === cs.id ||
+          (
+            ls.date === cs.date && 
+            ls.durationMinutes === cs.durationMinutes &&
+            (ls.notes === cs.notes || (ls.notes && cs.notes && ls.notes.slice(0, 30) === cs.notes.slice(0, 30)))
+          ) ||
+          (
+            ls.date === cs.date && 
+            ls.xpEarned === cs.xpEarned && 
+            (ls.moduleName === cs.moduleName || ls.topicName === cs.topicName)
+          )
+        )
       );
 
       if (localMatch) {
         matchedLocalIds.add(localMatch.id);
-        
+
         // Critical Fix for Rohit's Timer Bug:
         // If the local session has a genuine duration (>0) and the cloud session only has default 60 (or missing)
         // while local is not 60, NEVER clobber the user's logged duration!
@@ -131,7 +151,7 @@ export const ApiService = {
           ? localMatch.durationMinutes
           : (cs.durationMinutes || localMatch.durationMinutes || 60);
 
-        return {
+        mergedCloud.push({
           ...cs,
           id: localMatch.id, // keep local ID stable
           cloudId: cs.id,
@@ -145,36 +165,38 @@ export const ApiService = {
           mood: localMatch.mood || cs.mood,
           category: localMatch.category || cs.category,
           // Retain evaluation scores
-          evalProductivity: localMatch.evalProductivity || cs.evalProductivity,
-          evalDifficulty: localMatch.evalDifficulty || cs.evalDifficulty,
-          evalAccuracy: localMatch.evalAccuracy || cs.evalAccuracy,
-          evalDepth: localMatch.evalDepth || cs.evalDepth,
-          evalMastery: localMatch.evalMastery || cs.evalMastery,
-          evalApplication: localMatch.evalApplication || cs.evalApplication,
-          evalOutputQuality: localMatch.evalOutputQuality || cs.evalOutputQuality,
-          evalProblemSolving: localMatch.evalProblemSolving || cs.evalProblemSolving,
-          evalIndependence: localMatch.evalIndependence || cs.evalIndependence,
-          evalGoalRelevance: localMatch.evalGoalRelevance || cs.evalGoalRelevance,
-          totalEvalMarks: localMatch.totalEvalMarks || cs.totalEvalMarks,
-          evaluationMode: localMatch.evaluationMode || cs.evaluationMode,
-        };
+          evalProductivity: localMatch.evalProductivity ?? cs.evalProductivity,
+          evalDifficulty: localMatch.evalDifficulty ?? cs.evalDifficulty,
+          evalAccuracy: localMatch.evalAccuracy ?? cs.evalAccuracy,
+          evalDepth: localMatch.evalDepth ?? cs.evalDepth,
+          evalMastery: localMatch.evalMastery ?? cs.evalMastery,
+          evalApplication: localMatch.evalApplication ?? cs.evalApplication,
+          evalOutputQuality: localMatch.evalOutputQuality ?? cs.evalOutputQuality,
+          evalProblemSolving: localMatch.evalProblemSolving ?? cs.evalProblemSolving,
+          evalIndependence: localMatch.evalIndependence ?? cs.evalIndependence,
+          evalGoalRelevance: localMatch.evalGoalRelevance ?? cs.evalGoalRelevance,
+          totalEvalMarks: localMatch.totalEvalMarks ?? cs.totalEvalMarks,
+          evaluationMode: localMatch.evaluationMode ?? cs.evaluationMode,
+        });
+      } else {
+        mergedCloud.push(cs);
       }
+    }
 
-      return cs;
-    });
-
-    // Add any unsynced or local-only sessions that don't exist on the cloud yet
+    // Add any truly unsynced or local-only sessions that don't exist on the cloud yet
     const localOnly = localSessions.filter(ls => !matchedLocalIds.has(ls.id) && !ls.cloudId);
 
-    // Combine and sort by date descending
+    // Combine, deduplicate, and sort by date descending
     const combined = [...localOnly, ...mergedCloud];
-    combined.sort((a, b) => {
+    const deduplicated = StorageService.deduplicateSessions(combined);
+
+    deduplicated.sort((a, b) => {
       const dateCmp = (b.date || '').localeCompare(a.date || '');
       if (dateCmp !== 0) return dateCmp;
       return (b.startTime || '').localeCompare(a.startTime || '');
     });
 
-    return combined;
+    return deduplicated;
   },
 
   async login(username: string, password: string): Promise<{ success: boolean; user?: AuthUser; error?: string }> {
@@ -274,6 +296,12 @@ export const ApiService = {
 
   // Pull latest user data & sessions from the site database
   async syncWithCloud(): Promise<boolean> {
+    if (isSyncInProgress) {
+      console.log('[Sync] Cloud sync already in progress, skipping overlapping trigger.');
+      return false;
+    }
+    isSyncInProgress = true;
+
     const user = StorageService.getAuthUser();
     const token = StorageService.getAuthToken();
     const effectiveUserId = user?.id || 'cmv0ejzwk00002ebpsqohbcn1';
@@ -305,6 +333,8 @@ export const ApiService = {
       }
     } catch (err) {
       console.warn('Background cloud sync error:', err);
+    } finally {
+      isSyncInProgress = false;
     }
     return false;
   },
@@ -350,6 +380,25 @@ export const ApiService = {
 
   // Asynchronously upload a completed mobile session to the live website database
   async syncSessionToCloud(session: StudySession): Promise<string | null> {
+    if (inFlightUploads.has(session.id)) {
+      console.log('[Sync] Session upload already in-flight for:', session.id);
+      return null;
+    }
+
+    // Check if cloudId was already assigned
+    if (session.cloudId) {
+      return session.cloudId;
+    }
+
+    // Re-check fresh from local storage
+    const currentList = StorageService.getSessions();
+    const freshMatch = currentList.find(s => s.id === session.id);
+    if (freshMatch?.cloudId) {
+      return freshMatch.cloudId;
+    }
+
+    inFlightUploads.add(session.id);
+
     const token = StorageService.getAuthToken();
     const user = StorageService.getAuthUser();
 
@@ -415,13 +464,15 @@ export const ApiService = {
       }
     } catch (err) {
       console.warn('Session cloud upload failed (saved locally):', err);
+    } finally {
+      inFlightUploads.delete(session.id);
     }
     return null;
   },
 
   // Upload any offline/local sessions that have not yet synced to the cloud database
   async uploadUnsyncedSessions(): Promise<number> {
-    const unsynced = StorageService.getSessions().filter(s => !s.cloudId);
+    const unsynced = StorageService.getSessions().filter(s => !s.cloudId && !inFlightUploads.has(s.id));
     let count = 0;
     for (const s of unsynced) {
       const cloudId = await this.syncSessionToCloud(s);

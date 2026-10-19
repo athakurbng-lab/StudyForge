@@ -17,20 +17,20 @@ export async function OPTIONS() {
 
 export async function GET() {
   const versionData = {
-    version: "1.0.16",
-    versionCode: 17,
-    releaseDate: "2026-10-19",
+    version: "1.0.17",
+    versionCode: 18,
+    releaseDate: "2026-10-20",
     minSupportedVersion: "1.0.0",
     changelog: [
-      "🚀 Robust Offline & Guest Sync: Client sync now automatically attributes local sessions to your account even if auth token is expired or running in offline mode",
-      "🛡️ Token-Independent Cloud Persist: Backend /api/sessions accepts verified user fallback to prevent 401 Unauthorized sync failures",
-      "⚡ Automatic Launch Sync: Mobile app now triggers bidirectional local & cloud sync immediately on startup without needing sign-in hurdles",
-      "🔄 Session Upload Safeguards: Auto-sanitizes notes length and guarantees 100% upload reliability"
+      "🛡️ Sync Idempotency Guard: Server now prevents duplicate study sessions from being recorded in the database when syncing",
+      "⚡ Concurrency Lock & In-Flight Tracking: Eliminates overlapping sync uploads and prevents duplicate session generation",
+      "🔄 Non-Destructive 1-to-1 Cloud Reconciliation: Merges local and cloud records with strict deduplication by cloud ID, local ID, and fuzzy content",
+      "🧹 Automatic Local Storage Deduplication: Cleans existing duplicate records and restores accurate XP balances on startup"
     ],
-    downloadUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.16.apk",
-    githubUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.16.apk",
+    downloadUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.17.apk",
+    githubUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.17.apk",
     fileSizeMb: 4.1,
-    sha256: "20cdb585d2b343df57c054e67d52a2cbbcddce247fa4082c8aac7271d3b12496"
+    sha256: "58bad817136810435b2f959260c3b9ff60599d81d2be96d25f3df4111762dde0"
   };
 
   return NextResponse.json(versionData, {

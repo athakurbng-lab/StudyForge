@@ -129,8 +129,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               onClick={async () => {
                 setLoading(true);
                 setError(null);
-                const uploaded = await ApiService.uploadUnsyncedSessions();
+                const initialPending = StorageService.getSessions().filter(s => !s.cloudId).length;
                 const ok = await ApiService.syncWithCloud();
+                const remainingPending = StorageService.getSessions().filter(s => !s.cloudId).length;
+                const uploaded = Math.max(0, initialPending - remainingPending);
                 setLoading(false);
                 if (ok) {
                   onUserChanged(currentUser);
