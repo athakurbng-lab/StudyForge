@@ -7,33 +7,50 @@ import { Navigation } from '@/app/dashboard/Navigation';
 
 export default async function UserProfilePage({ params }: { params: { id: string } }) {
   const token = cookies().get('token')?.value;
-  if (!token) redirect('/login');
-  
-  const payload = await verifyAuthToken(token);
-  if (!payload) redirect('/login');
+  const payload = token ? await verifyAuthToken(token) : null;
 
-  const currentUser = await prisma.user.findUnique({
+  const currentUser = payload ? await prisma.user.findUnique({
     where: { id: payload.userId as string },
     select: { displayName: true, username: true, streak: true, totalXP: true, dailyXpGoal: true }
-  });
+  }) : null;
 
-  const targetUser = await prisma.user.findUnique({
+  // 1. Look up by ID
+  let targetUser = await prisma.user.findUnique({
     where: { id: params.id },
     include: {
       studySessions: {
         orderBy: { createdAt: 'desc' },
-        take: 20
+        take: 30
       }
     }
   });
 
-  const isMe = payload.userId === targetUser?.id;
+  // 2. Fallback: look up by username or displayName (case-insensitive)
+  if (!targetUser) {
+    const cleanParam = decodeURIComponent(params.id).trim().replace(/^@/, '');
+    targetUser = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: { equals: cleanParam, mode: 'insensitive' } },
+          { displayName: { equals: cleanParam, mode: 'insensitive' } }
+        ]
+      },
+      include: {
+        studySessions: {
+          orderBy: { createdAt: 'desc' },
+          take: 30
+        }
+      }
+    });
+  }
+
+  const isMe = payload ? payload.userId === targetUser?.id : false;
 
   let approvedSessionIds: string[] = [];
   let isMyWatcher = false;
   let amIWatching = false;
 
-  if (targetUser && !isMe) {
+  if (targetUser && payload && !isMe) {
     const accessReqs = await prisma.sessionAccessRequest.findMany({
       where: {
         ownerId: targetUser.id,
@@ -67,7 +84,7 @@ export default async function UserProfilePage({ params }: { params: { id: string
   if (!targetUser) {
     return (
       <div className="min-h-screen bg-[#0a0a0f]">
-        <Navigation userXp={currentUser!.totalXP} userStreak={currentUser!.streak} userName={currentUser!.displayName || currentUser!.username} />
+        <Navigation userXp={currentUser?.totalXP || 0} userStreak={currentUser?.streak || 0} userName={currentUser?.displayName || currentUser?.username || 'Guest'} />
         <div className="text-center p-12 text-slate-400">User not found.</div>
       </div>
     );
@@ -76,7 +93,7 @@ export default async function UserProfilePage({ params }: { params: { id: string
 
   return (
     <div className="min-h-screen bg-[#0a0a0f]">
-      <Navigation userXp={currentUser!.totalXP} userStreak={currentUser!.streak} userName={currentUser!.displayName || currentUser!.username} />
+      <Navigation userXp={currentUser?.totalXP || 0} userStreak={currentUser?.streak || 0} userName={currentUser?.displayName || currentUser?.username || 'Guest'} />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/20 border border-indigo-500/30 rounded-2xl p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">

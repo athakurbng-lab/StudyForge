@@ -476,6 +476,31 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
         {currentUser ? (
           <div className="space-y-3">
+            {/* View My Profile Card */}
+            <div className="bg-indigo-50/60 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 rounded-xl p-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-indigo-600 text-white font-black text-sm flex items-center justify-center shrink-0">
+                  {(currentUser.displayName || currentUser.username).charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <span className="font-bold text-xs text-slate-800 dark:text-slate-100 block truncate">
+                    {currentUser.displayName || currentUser.username}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block truncate">
+                    @{currentUser.username} • {StorageService.getTotalXp().toLocaleString()} XP
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectUserId(currentUser.id)}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all active:scale-95 shrink-0 shadow-xs"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>My Profile</span>
+              </button>
+            </div>
+
             {/* Session Access Requests Inbox (if any) */}
             {accessRequests.length > 0 && (
               <div className="bg-amber-50/80 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/60 rounded-xl p-3 space-y-2">

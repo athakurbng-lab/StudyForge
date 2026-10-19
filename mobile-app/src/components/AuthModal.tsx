@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User, Lock, Sparkles, LogIn, UserPlus, LogOut, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { X, User, Lock, Sparkles, LogIn, UserPlus, LogOut, CheckCircle2, AlertCircle, RefreshCw, Eye } from 'lucide-react';
 import { ApiService, AuthUser } from '../services/apiService';
 import { StorageService } from '../services/storageService';
 
@@ -8,13 +8,15 @@ interface AuthModalProps {
   onClose: () => void;
   currentUser: AuthUser | null;
   onUserChanged: (user: AuthUser | null) => void;
+  onViewProfile?: (userId: string) => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   currentUser,
-  onUserChanged
+  onUserChanged,
+  onViewProfile
 }) => {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
@@ -100,6 +102,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             {error && (
               <p className="text-xs text-rose-500 font-semibold">{error}</p>
             )}
+
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onViewProfile?.(currentUser.id);
+              }}
+              className="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95"
+            >
+              <Eye className="w-4 h-4" />
+              <span>View My Study Profile & Logs</span>
+            </button>
 
             <button
               type="button"

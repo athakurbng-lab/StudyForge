@@ -411,7 +411,10 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
                         : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      onClick={() => setSelectedUserProfileId(member.userId)}
+                      className="flex items-center gap-3 min-w-0 cursor-pointer flex-1 group"
+                    >
                       {/* Rank Badge */}
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-xs shrink-0 ${medalBg}`}>
                         {index + 1}
@@ -419,14 +422,10 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({
 
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedUserProfileId(member.userId)}
-                            className="text-xs font-bold text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline truncate text-left flex items-center gap-1 group"
-                          >
+                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:underline truncate text-left flex items-center gap-1">
                             <span className="truncate">{member.displayName}</span>
                             <Eye className="w-3 h-3 text-slate-400 group-hover:text-indigo-500 shrink-0" />
-                          </button>
+                          </span>
                           {isMe && (
                             <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.2 rounded-md font-bold shrink-0">
                               You

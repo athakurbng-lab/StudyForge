@@ -16,6 +16,7 @@ import { AnalyticsView } from './components/AnalyticsView';
 import { SettingsView } from './components/SettingsView';
 import { GroupsView } from './components/GroupsView';
 import { AuthModal } from './components/AuthModal';
+import { UserProfileModal } from './components/UserProfileModal';
 import { LogSessionModal } from './components/LogSessionModal';
 import { BottomNav, NavTab } from './components/BottomNav';
 import { DailyGoalModal } from './components/DailyGoalModal';
@@ -46,6 +47,7 @@ export const App: React.FC = () => {
   const [aiNotice, setAiNotice] = useState<{ message: string; details: string } | null>(null);
   const [availableUpdate, setAvailableUpdate] = useState<AppReleaseInfo | null>(null);
   const [showHomeGraph, setShowHomeGraph] = useState<boolean>(false);
+  const [inspectedUserProfileId, setInspectedUserProfileId] = useState<string | null>(null);
 
   // Filter States
   const [selectedModuleFilter, setSelectedModuleFilter] = useState<string | null>(null);
@@ -478,6 +480,7 @@ export const App: React.FC = () => {
         onClose={() => setIsAuthOpen(false)}
         currentUser={currentUser}
         onUserChanged={handleUserChanged}
+        onViewProfile={(userId) => setInspectedUserProfileId(userId)}
       />
 
       {/* Log Study Session Modal (AI Evaluation & Cloud Sync) */}
@@ -521,6 +524,17 @@ export const App: React.FC = () => {
         <UpdateModal
           release={availableUpdate}
           onClose={() => setAvailableUpdate(null)}
+        />
+      )}
+
+      {/* Inspected User Profile Modal (Self or Friend) */}
+      {inspectedUserProfileId && (
+        <UserProfileModal
+          userId={inspectedUserProfileId}
+          isOpen={Boolean(inspectedUserProfileId)}
+          onClose={() => setInspectedUserProfileId(null)}
+          currentUser={currentUser}
+          onOpenAuth={() => setIsAuthOpen(true)}
         />
       )}
     </div>

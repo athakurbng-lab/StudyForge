@@ -118,7 +118,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           <div className="flex items-center gap-2">
             <Eye className="w-4 h-4 text-indigo-500" />
             <h3 className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">
-              Friend & Study Profile
+              {profileData?.isMe ? 'My Study Profile' : 'Friend & Study Profile'}
             </h3>
           </div>
           <button

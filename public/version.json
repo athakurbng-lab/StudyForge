@@ -1,16 +1,16 @@
 {
-  "version": "1.0.13",
-  "versionCode": 14,
+  "version": "1.0.14",
+  "versionCode": 15,
   "releaseDate": "2026-10-19",
   "minSupportedVersion": "1.0.0",
   "changelog": [
-    "🎯 10-Criteria Evaluation: Interactive self-rating sliders (1–10) across productivity, difficulty, accuracy, depth, mastery & impact",
-    "⚡ Authentic XP Formula: Total XP = Focused Hours × Evaluation Marks (Sum of 10 criteria, 10–100)",
-    "⏱️ Extended Study Sprints: Log up to 8 hours (480 minutes) with exact fractional hour XP scaling (e.g. 45m = 0.75h)",
-    "🤖 Optional AI Auto-Scoring: Seamless toggle to analyze notes and auto-calibrate all 10 criteria"
+    "👥 Friend & Self Profile Access: Full study profile & session log viewer directly from avatar, settings, and group leaderboards",
+    "🌐 Cross-Origin & Preflight Fix: Added explicit CORS & OPTIONS support to user profile, watcher, and access request endpoints",
+    "🔍 Case-Insensitive User Search: Friend search and watcher requests now effortlessly match usernames and display names regardless of casing",
+    "⚡ Enhanced Group Leaderboard: Entire leaderboard row is now clickable to seamlessly inspect friends' study history"
   ],
-  "downloadUrl": "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.13.apk",
-  "githubUrl": "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.13.apk",
+  "downloadUrl": "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.14.apk",
+  "githubUrl": "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.14.apk",
   "fileSizeMb": 4.1,
-  "sha256": "9df7e12f354e727f5cd25e231fd0579cafdda5d2961122657a26501dc2f41c9c"
+  "sha256": "6985c0577b0a0dcb328fa57797563ea815ef5dfcda257c09ea4c867dea11ffaa"
 }

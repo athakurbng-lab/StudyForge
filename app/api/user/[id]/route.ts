@@ -3,6 +3,19 @@ import prisma from '@/app/lib/prisma';
 import { verifyAuthToken } from '@/app/lib/auth';
 import { cookies } from 'next/headers';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: CORS_HEADERS
+  });
+}
+
 async function getAuthUserId(request: Request): Promise<string | null> {
   let token = cookies().get('token')?.value;
   const authHeader = request.headers.get('authorization');
@@ -17,11 +30,9 @@ async function getAuthUserId(request: Request): Promise<string | null> {
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const currentUserId = await getAuthUserId(request);
-    if (!currentUserId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
-    const targetUser = await prisma.user.findUnique({
+    // 1. First try lookup by ID
+    let targetUser = await prisma.user.findUnique({
       where: { id: params.id },
       select: {
         id: true,
@@ -38,22 +49,53 @@ export async function GET(request: Request, { params }: { params: { id: string }
         createdAt: true,
         studySessions: {
           orderBy: { createdAt: 'desc' },
-          take: 30
+          take: 50
         }
       }
     });
 
+    // 2. If not found by ID, try case-insensitive username or displayName lookup
     if (!targetUser) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      const cleanParam = decodeURIComponent(params.id).trim().replace(/^@/, '');
+      targetUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { username: { equals: cleanParam, mode: 'insensitive' } },
+            { displayName: { equals: cleanParam, mode: 'insensitive' } }
+          ]
+        },
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          bio: true,
+          subjects: true,
+          streak: true,
+          longestStreak: true,
+          totalXP: true,
+          dailyXpGoal: true,
+          freezeTokens: true,
+          isPublic: true,
+          createdAt: true,
+          studySessions: {
+            orderBy: { createdAt: 'desc' },
+            take: 50
+          }
+        }
+      });
     }
 
-    const isMe = currentUserId === targetUser.id;
+    if (!targetUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404, headers: CORS_HEADERS });
+    }
+
+    const isMe = currentUserId ? currentUserId === targetUser.id : false;
 
     let isMyWatcher = false;
     let amIWatching = false;
     let approvedSessionIds: string[] = [];
 
-    if (!isMe) {
+    if (currentUserId && !isMe) {
       // Is targetUser a watcher of current user? (Target can see current user's logs)
       const watcherRecord = await prisma.watcher.findUnique({
         where: {
@@ -136,20 +178,69 @@ export async function GET(request: Request, { params }: { params: { id: string }
         isMyWatcher,
         amIWatching,
         sessions: sanitizedSessions
-      });
+      }, { headers: CORS_HEADERS });
     }
 
-    // Viewing myself
+    if (isMe) {
+      // Viewing myself
+      return NextResponse.json({
+        success: true,
+        user: targetUser,
+        isMe: true,
+        isMyWatcher: false,
+        amIWatching: false,
+        sessions: targetUser.studySessions.map(s => ({ ...s, hasAccess: true, requestStatus: null }))
+      }, { headers: CORS_HEADERS });
+    }
+
+    // Guest / Unauthenticated visitor viewing a public user profile
+    const guestSessions = targetUser.studySessions.map(session => {
+      const hasAccess = session.isShared;
+      if (hasAccess) {
+        return {
+          ...session,
+          hasAccess: true,
+          requestStatus: null
+        };
+      } else {
+        return {
+          id: session.id,
+          userId: session.userId,
+          title: session.title,
+          tags: session.tags,
+          xpAwarded: session.xpAwarded,
+          isShared: false,
+          hasAccess: false,
+          requestStatus: null,
+          createdAt: session.createdAt
+        };
+      }
+    });
+
     return NextResponse.json({
       success: true,
-      user: targetUser,
-      isMe: true,
+      user: {
+        id: targetUser.id,
+        username: targetUser.username,
+        displayName: targetUser.displayName,
+        bio: targetUser.bio,
+        subjects: targetUser.subjects,
+        streak: targetUser.streak,
+        longestStreak: targetUser.longestStreak,
+        totalXP: targetUser.totalXP,
+        dailyXpGoal: targetUser.dailyXpGoal,
+        freezeTokens: targetUser.freezeTokens,
+        isPublic: targetUser.isPublic,
+        createdAt: targetUser.createdAt
+      },
+      isMe: false,
       isMyWatcher: false,
       amIWatching: false,
-      sessions: targetUser.studySessions.map(s => ({ ...s, hasAccess: true, requestStatus: null }))
-    });
+      sessions: guestSessions
+    }, { headers: CORS_HEADERS });
+
   } catch (error) {
     console.error('User profile route error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500, headers: CORS_HEADERS });
   }
 }
