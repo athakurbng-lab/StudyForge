@@ -5,8 +5,9 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { App } from '@capacitor/app';
 import { SubjectModule, ExamType } from '../data/exams';
 import { GeminiService } from '../services/geminiService';
-import { StudySession } from '../services/storageService';
+import { StudySession, calculateSessionXP } from '../services/storageService';
 import { NotificationService } from '../services/notificationService';
+import { EvaluationSliders, EvaluationScores, DEFAULT_EVAL_SCORES } from './EvaluationSliders';
 
 interface FloatingTimerBarProps {
   exam: ExamType;
@@ -44,6 +45,9 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
   const [topicName, setTopicName] = useState('');
   const [mood, setMood] = useState<'focused' | 'neutral' | 'distracted'>('focused');
   const [isShared, setIsShared] = useState<boolean>(true);
+  const [evalScores, setEvalScores] = useState<EvaluationScores>({ ...DEFAULT_EVAL_SCORES });
+  const [evalMode, setEvalMode] = useState<'manual' | 'ai'>('manual');
+  const [aiFeedbackText, setAiFeedbackText] = useState<string>('');
   const [isEvaluating, setIsEvaluating] = useState(false);
 
   const resetAutoHideTimer = useCallback(() => {
@@ -292,27 +296,53 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
 
   const currentDisplayTime = mode === 'pomodoro' ? formatTime(secondsLeft) : formatTime(elapsedSeconds);
 
-  const handleSaveSession = async () => {
+  const actualSecondsSpent = mode === 'pomodoro' ? (pomodoroTargetSeconds - secondsLeft) : elapsedSeconds;
+  const currentDurationMinutes = Math.max(1, Math.round(actualSecondsSpent / 60));
+  const totalEvalMarks = Object.values(evalScores).reduce((sum, val) => sum + (Number(val) || 0), 0);
+  const calculatedTimerXP = calculateSessionXP(currentDurationMinutes, totalEvalMarks);
+
+  const handleScoreChange = (key: keyof EvaluationScores, val: number) => {
+    setEvalScores(prev => ({ ...prev, [key]: val }));
+  };
+
+  const handleRunAiEvaluation = async () => {
+    if (sessionNotes.trim().length < 5) {
+      return;
+    }
     setIsEvaluating(true);
-
-    const actualSecondsSpent = mode === 'pomodoro' ? (pomodoroTargetSeconds - secondsLeft) : elapsedSeconds;
-    const durationMinutes = Math.max(1, Math.round(actualSecondsSpent / 60));
-
-    const now = new Date();
-    const endTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const startTimeObj = new Date(now.getTime() - durationMinutes * 60000);
-    const startTimeStr = startTimeObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
     try {
-      // AI Evaluation
       const evalResult = await GeminiService.evaluateSession({
         exam,
         subject: currentModule?.category || 'General',
         moduleName: currentModule?.name || 'Study Session',
         topicName: topicName.trim() || undefined,
-        durationMinutes,
-        notes: sessionNotes,
+        durationMinutes: currentDurationMinutes,
+        notes: sessionNotes.trim(),
       });
+
+      if (evalResult.evalScores) {
+        setEvalScores(evalResult.evalScores);
+      }
+      setAiFeedbackText(evalResult.feedback);
+    } catch (err: any) {
+      console.warn('AI evaluation in timer modal error:', err);
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
+
+  const handleSaveSession = async () => {
+    setIsEvaluating(true);
+
+    const now = new Date();
+    const endTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const startTimeObj = new Date(now.getTime() - currentDurationMinutes * 60000);
+    const startTimeStr = startTimeObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    try {
+      const finalFeedback = evalMode === 'ai' && aiFeedbackText
+        ? aiFeedbackText
+        : `[📊 Self-Evaluated: ${totalEvalMarks}/100 Marks (${(currentDurationMinutes / 60).toFixed(2)}h focused)]\nProductivity: ${evalScores.evalProductivity}/10, Difficulty: ${evalScores.evalDifficulty}/10, Accuracy: ${evalScores.evalAccuracy}/10, Depth: ${evalScores.evalDepth}/10, Mastery: ${evalScores.evalMastery}/10, Application: ${evalScores.evalApplication}/10, Output: ${evalScores.evalOutputQuality}/10, Problem-Solving: ${evalScores.evalProblemSolving}/10, Independence: ${evalScores.evalIndependence}/10, Relevance: ${evalScores.evalGoalRelevance}/10.`;
 
       const newSession: StudySession = {
         id: `sess-${Date.now()}`,
@@ -322,17 +352,27 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
         topicName: topicName.trim() || undefined,
         startTime: startTimeStr,
         endTime: endTimeStr,
-        durationMinutes,
-        xpEarned: evalResult.xp,
+        durationMinutes: currentDurationMinutes,
+        xpEarned: calculatedTimerXP,
         mood,
-        notes: sessionNotes,
-        aiFeedback: evalResult.feedback,
+        notes: sessionNotes.trim() || 'Timer focus session completed.',
+        aiFeedback: finalFeedback,
         date: now.toISOString().split('T')[0],
         category: currentModule?.category || 'General',
-        apiError: evalResult.apiError,
-        usedFallback: evalResult.usedFallback,
-        modelUsed: evalResult.modelUsed,
-        isShared
+        isShared,
+        // 10-Criteria Evaluation Fields
+        evalProductivity: evalScores.evalProductivity,
+        evalDifficulty: evalScores.evalDifficulty,
+        evalAccuracy: evalScores.evalAccuracy,
+        evalDepth: evalScores.evalDepth,
+        evalMastery: evalScores.evalMastery,
+        evalApplication: evalScores.evalApplication,
+        evalOutputQuality: evalScores.evalOutputQuality,
+        evalProblemSolving: evalScores.evalProblemSolving,
+        evalIndependence: evalScores.evalIndependence,
+        evalGoalRelevance: evalScores.evalGoalRelevance,
+        totalEvalMarks: totalEvalMarks,
+        evaluationMode: evalMode
       };
 
       onSessionCompleted(newSession);
@@ -343,7 +383,7 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
         Haptics.impact({ style: ImpactStyle.Medium });
       } catch {}
 
-      // Reset timer
+      // Reset timer & evaluation state
       setIsRunning(false);
       targetEndTimeRef.current = null;
       stopwatchStartTimeRef.current = null;
@@ -353,6 +393,8 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
       setElapsedSeconds(0);
       setSessionNotes('');
       setTopicName('');
+      setEvalScores({ ...DEFAULT_EVAL_SCORES });
+      setAiFeedbackText('');
       setShowCompleteModal(false);
     } catch (err: any) {
       console.warn('FloatingTimerBar save error:', err);
@@ -647,6 +689,19 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
                 </div>
               </div>
 
+              {/* 10-Criteria Evaluation Sliders Component */}
+              <EvaluationSliders
+                scores={evalScores}
+                onChange={handleScoreChange}
+                onSetAll={setEvalScores}
+                durationMinutes={currentDurationMinutes}
+                mode={evalMode}
+                onModeToggle={setEvalMode}
+                isEvaluatingAi={isEvaluating}
+                onTriggerAi={handleRunAiEvaluation}
+                canTriggerAi={sessionNotes.trim().length >= 5}
+              />
+
               {/* Privacy & Sharing Selector */}
               <div className="bg-slate-50 dark:bg-slate-850 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -684,17 +739,17 @@ export const FloatingTimerBar: React.FC<FloatingTimerBarProps> = ({
                   type="button"
                   disabled={isEvaluating}
                   onClick={handleSaveSession}
-                  className="w-full py-2.5 px-4 bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  className="w-full py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white text-xs font-bold rounded-xl shadow-md flex items-center justify-center gap-2 transition-all disabled:opacity-50 active:scale-95"
                 >
                   {isEvaluating ? (
                     <>
-                      <Sparkles className="w-4 h-4 animate-spin text-amber-300" />
-                      <span>Evaluating with Gemini 2.5 Flash...</span>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Evaluating...</span>
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 text-amber-300" />
-                      <span>Claim XP & Save Session</span>
+                      <span>Save Session (+{calculatedTimerXP} XP)</span>
                     </>
                   )}
                 </button>

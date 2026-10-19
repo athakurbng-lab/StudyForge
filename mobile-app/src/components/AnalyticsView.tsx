@@ -213,6 +213,44 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ sessions, onOpenLo
             )}
           </div>
 
+          {/* 10-Criteria Evaluation Metrics */}
+          {(() => {
+            const evaluatedSessions = sessions.filter(s => typeof s.totalEvalMarks === 'number');
+            if (evaluatedSessions.length === 0) return null;
+            const avgMarks = Math.round(evaluatedSessions.reduce((acc, s) => acc + (s.totalEvalMarks || 0), 0) / evaluatedSessions.length);
+            const totalEvalHours = evaluatedSessions.reduce((acc, s) => acc + s.durationMinutes, 0) / 60;
+            const totalEvalXp = evaluatedSessions.reduce((acc, s) => acc + s.xpEarned, 0);
+            const xpPerHour = totalEvalHours > 0 ? Math.round(totalEvalXp / totalEvalHours) : 0;
+
+            return (
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                    Evaluation Performance (10 Criteria)
+                  </h3>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                    {evaluatedSessions.length} evaluated
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-800/40 rounded-xl p-3">
+                    <div className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Average Marks</div>
+                    <div className="text-xl font-black text-indigo-600 dark:text-indigo-400 mt-0.5">
+                      {avgMarks} <span className="text-xs font-bold text-slate-400">/ 100</span>
+                    </div>
+                  </div>
+                  <div className="bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800/40 rounded-xl p-3">
+                    <div className="text-[11px] font-bold text-slate-600 dark:text-slate-400">XP Efficiency</div>
+                    <div className="text-xl font-black text-purple-600 dark:text-purple-400 mt-0.5">
+                      {xpPerHour} <span className="text-xs font-bold text-slate-400">XP/hr</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* 5-Session Learning Curve Status */}
           <div className="bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/60 dark:border-indigo-800/40 rounded-2xl p-4 shadow-2xs">
             <div className="flex items-center justify-between mb-2">

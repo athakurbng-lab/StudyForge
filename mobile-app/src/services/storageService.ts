@@ -21,6 +21,30 @@ export interface StudySession {
   usedFallback?: boolean;
   modelUsed?: string;
   isShared?: boolean;
+  // 10-Criteria Personal Evaluation System (Each scored 1-10, total 10-100)
+  evalProductivity?: number;       // Work volume vs personal baseline
+  evalDifficulty?: number;         // Task complexity (1-2 easy, 5-6 moderate, 9-10 complex)
+  evalAccuracy?: number;           // Correctness of answers/facts/calculations
+  evalDepth?: number;              // Depth of exploration & conceptual understanding
+  evalMastery?: number;            // Demonstrated recall and explanation without notes
+  evalApplication?: number;        // Performance on unfamiliar questions/scenarios
+  evalOutputQuality?: number;      // Usability and organization of notes/deliverables
+  evalProblemSolving?: number;     // Effective approach to challenging parts
+  evalIndependence?: number;       // Execution without assistance or prompts
+  evalGoalRelevance?: number;      // Alignment with long-term exam priorities
+  totalEvalMarks?: number;         // Sum of all 10 criteria (10-100)
+  evaluationMode?: 'manual' | 'ai'; // 'manual' (default) or 'ai'
+}
+
+/**
+ * Calculates session XP based on exact focused time and evaluation marks.
+ * Formula: Focused Hours × Total Evaluation Marks (Sum of 10 criteria, 10–100)
+ * Where Focused Hours = durationMinutes / 60.
+ */
+export function calculateSessionXP(durationMinutes: number, totalEvalMarks: number): number {
+  const focusedHours = Math.max(0.01, durationMinutes / 60);
+  const clampedMarks = Math.max(10, Math.min(100, totalEvalMarks));
+  return Math.max(1, Math.round(focusedHours * clampedMarks));
 }
 
 export interface DayStats {
@@ -378,8 +402,8 @@ export const StorageService = {
       inactivityAlertTime: '20:30',
       streakSaverEnabled: true,
       spacedRevisionAlertEnabled: true,
-      appVersion: 'v1.0.12 (Production)',
-      buildNumber: '2026.10.16-v13',
+      appVersion: 'v1.0.13 (Production)',
+      buildNumber: '2026.10.19-v14',
     };
     if (!saved) return defaults;
     try {

@@ -87,7 +87,20 @@ export const ApiService = {
         aiFeedback: s.aiBreakdown || '',
         date: dateStr,
         category: s.tags?.[0] || 'Core Subject',
-        isShared: Boolean(s.isShared)
+        isShared: Boolean(s.isShared),
+        // 10-Criteria Evaluation Fields
+        evalProductivity: s.evalProductivity ?? undefined,
+        evalDifficulty: s.evalDifficulty ?? undefined,
+        evalAccuracy: s.evalAccuracy ?? undefined,
+        evalDepth: s.evalDepth ?? undefined,
+        evalMastery: s.evalMastery ?? undefined,
+        evalApplication: s.evalApplication ?? undefined,
+        evalOutputQuality: s.evalOutputQuality ?? undefined,
+        evalProblemSolving: s.evalProblemSolving ?? undefined,
+        evalIndependence: s.evalIndependence ?? undefined,
+        evalGoalRelevance: s.evalGoalRelevance ?? undefined,
+        totalEvalMarks: s.totalEvalMarks ?? undefined,
+        evaluationMode: s.evaluationMode ?? undefined,
       };
     });
   },
@@ -131,6 +144,19 @@ export const ApiService = {
           exam: localMatch.exam || cs.exam,
           mood: localMatch.mood || cs.mood,
           category: localMatch.category || cs.category,
+          // Retain evaluation scores
+          evalProductivity: localMatch.evalProductivity || cs.evalProductivity,
+          evalDifficulty: localMatch.evalDifficulty || cs.evalDifficulty,
+          evalAccuracy: localMatch.evalAccuracy || cs.evalAccuracy,
+          evalDepth: localMatch.evalDepth || cs.evalDepth,
+          evalMastery: localMatch.evalMastery || cs.evalMastery,
+          evalApplication: localMatch.evalApplication || cs.evalApplication,
+          evalOutputQuality: localMatch.evalOutputQuality || cs.evalOutputQuality,
+          evalProblemSolving: localMatch.evalProblemSolving || cs.evalProblemSolving,
+          evalIndependence: localMatch.evalIndependence || cs.evalIndependence,
+          evalGoalRelevance: localMatch.evalGoalRelevance || cs.evalGoalRelevance,
+          totalEvalMarks: localMatch.totalEvalMarks || cs.totalEvalMarks,
+          evaluationMode: localMatch.evaluationMode || cs.evaluationMode,
         };
       }
 
@@ -341,7 +367,20 @@ export const ApiService = {
           durationMinutes: session.durationMinutes,
           startTime: session.startTime,
           endTime: session.endTime,
-          mood: session.mood
+          mood: session.mood,
+          // 10-Criteria Evaluation Fields
+          evalProductivity: session.evalProductivity,
+          evalDifficulty: session.evalDifficulty,
+          evalAccuracy: session.evalAccuracy,
+          evalDepth: session.evalDepth,
+          evalMastery: session.evalMastery,
+          evalApplication: session.evalApplication,
+          evalOutputQuality: session.evalOutputQuality,
+          evalProblemSolving: session.evalProblemSolving,
+          evalIndependence: session.evalIndependence,
+          evalGoalRelevance: session.evalGoalRelevance,
+          totalEvalMarks: session.totalEvalMarks,
+          evaluationMode: session.evaluationMode
         })
       });
       if (res.ok) {

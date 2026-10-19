@@ -27,10 +27,22 @@ export async function POST(request: Request) {
       durationMinutes,
       startTime,
       endTime,
-      mood
+      mood,
+      evalProductivity,
+      evalDifficulty,
+      evalAccuracy,
+      evalDepth,
+      evalMastery,
+      evalApplication,
+      evalOutputQuality,
+      evalProblemSolving,
+      evalIndependence,
+      evalGoalRelevance,
+      totalEvalMarks,
+      evaluationMode
     } = await request.json();
 
-    if (!rawText || rawText.trim().length < 10) {
+    if (!rawText || rawText.trim().length < 5) {
       return NextResponse.json({ error: 'Session description is too short.' }, { status: 400 });
     }
 
@@ -51,10 +63,10 @@ export async function POST(request: Request) {
 
     let evaluation: any = null;
 
-    // 1. If client already evaluated session (e.g. mobile app with verified Gemini or local engine)
+    // 1. If client already evaluated session (e.g. mobile app with verified Gemini, self-rating, or local engine)
     if (typeof xpAwarded === 'number' && xpAwarded > 0) {
       evaluation = {
-        xpAwarded: Math.min(100, Math.max(1, Math.round(xpAwarded))),
+        xpAwarded: Math.min(1200, Math.max(1, Math.round(xpAwarded))),
         aiBreakdown: aiBreakdown || 'Study session verified and recorded.',
         aiSuggestion: aiSuggestion || 'Keep up consistent study sprints to compound retention.',
         closestBaseline: 1,
@@ -228,7 +240,7 @@ ${pastContext}`;
       }
     }
 
-    const finalXp = Math.min(100, Math.max(1, evaluation.xpAwarded));
+    const finalXp = Math.min(1200, Math.max(1, evaluation.xpAwarded));
     
     // Process retro-active XP updates for learning curve
     let totalXpDeducted = 0;
@@ -274,7 +286,20 @@ ${pastContext}`;
         durationMinutes: parsedDuration,
         startTime: startTime || null,
         endTime: endTime || null,
-        mood: mood || null
+        mood: mood || null,
+        // 10-Criteria Personal Evaluation System
+        evalProductivity: typeof evalProductivity === 'number' ? Math.round(evalProductivity) : null,
+        evalDifficulty: typeof evalDifficulty === 'number' ? Math.round(evalDifficulty) : null,
+        evalAccuracy: typeof evalAccuracy === 'number' ? Math.round(evalAccuracy) : null,
+        evalDepth: typeof evalDepth === 'number' ? Math.round(evalDepth) : null,
+        evalMastery: typeof evalMastery === 'number' ? Math.round(evalMastery) : null,
+        evalApplication: typeof evalApplication === 'number' ? Math.round(evalApplication) : null,
+        evalOutputQuality: typeof evalOutputQuality === 'number' ? Math.round(evalOutputQuality) : null,
+        evalProblemSolving: typeof evalProblemSolving === 'number' ? Math.round(evalProblemSolving) : null,
+        evalIndependence: typeof evalIndependence === 'number' ? Math.round(evalIndependence) : null,
+        evalGoalRelevance: typeof evalGoalRelevance === 'number' ? Math.round(evalGoalRelevance) : null,
+        totalEvalMarks: typeof totalEvalMarks === 'number' ? Math.round(totalEvalMarks) : null,
+        evaluationMode: typeof evaluationMode === 'string' ? evaluationMode : null
       }
     });
 

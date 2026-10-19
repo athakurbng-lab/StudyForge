@@ -226,7 +226,12 @@ export const SessionTimeline: React.FC<SessionTimelineProps> = ({
                     {getMoodIcon(session.mood)}
                     <span className="flex items-center gap-0.5 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded-sm">
                       <Sparkles className="w-3.5 h-3.5" />
-                      +{session.xpEarned} XP
+                      <span>+{session.xpEarned} XP</span>
+                      {session.totalEvalMarks && (
+                        <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 ml-1">
+                          ({(session.durationMinutes / 60).toFixed(1)}h × {session.totalEvalMarks})
+                        </span>
+                      )}
                     </span>
                   </div>
                 </div>
@@ -254,6 +259,47 @@ export const SessionTimeline: React.FC<SessionTimelineProps> = ({
                 {/* Expanded AI Evaluation Drawer */}
                 {isExpanded && (
                   <div className="mt-3 pt-2.5 border-t border-slate-200 dark:border-slate-700/80 animate-in fade-in duration-200 space-y-2.5">
+                    {/* 10-Criteria Evaluation Matrix (if present) */}
+                    {session.totalEvalMarks && (
+                      <div className="bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 space-y-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                            <span>{session.evaluationMode === 'ai' ? '🤖' : '📊'}</span>
+                            <span>{session.evaluationMode === 'ai' ? 'AI Evaluated' : 'Self-Rated Evaluation'}</span>
+                          </span>
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300">
+                            {session.totalEvalMarks} / 100 Marks
+                          </span>
+                        </div>
+
+                        {/* 10 Criteria Pills Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1 pt-0.5">
+                          {[
+                            { label: '📈 Productivity', val: session.evalProductivity },
+                            { label: '🧠 Difficulty', val: session.evalDifficulty },
+                            { label: '🎯 Accuracy', val: session.evalAccuracy },
+                            { label: '🔬 Depth', val: session.evalDepth },
+                            { label: '🏆 Mastery', val: session.evalMastery },
+                            { label: '💡 Application', val: session.evalApplication },
+                            { label: '📝 Output Qual.', val: session.evalOutputQuality },
+                            { label: '⚡ Problem-Solv.', val: session.evalProblemSolving },
+                            { label: '🦅 Independence', val: session.evalIndependence },
+                            { label: '🎯 Goal Relev.', val: session.evalGoalRelevance },
+                          ].map((crit, idx) => (
+                            <div key={idx} className="bg-white dark:bg-slate-900/80 px-2 py-1 rounded-lg border border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-[10px]">
+                              <span className="text-slate-600 dark:text-slate-400 font-medium truncate">{crit.label}</span>
+                              <strong className="text-indigo-600 dark:text-indigo-400 font-bold ml-1">{crit.val ?? 5}/10</strong>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Formula Math Line */}
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between">
+                          <span>Focused Hours: <strong>{(session.durationMinutes / 60).toFixed(2)}h</strong> ({session.durationMinutes}m)</span>
+                          <span className="font-bold text-indigo-600 dark:text-indigo-400">{(session.durationMinutes / 60).toFixed(2)}h × {session.totalEvalMarks} = +{session.xpEarned} XP</span>
+                        </div>
+                      </div>
+                    )}
                     {session.usedFallback || (session.aiFeedback && (session.aiFeedback.includes('Offline') || session.aiFeedback.includes('Live AI'))) ? (
                       <div className="bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-3 text-xs space-y-2">
                         <div className="flex items-center justify-between gap-1.5 text-amber-800 dark:text-amber-300 font-bold text-[11px]">

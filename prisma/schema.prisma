@@ -89,6 +89,21 @@ model StudySession {
   tags              String[]
   isShared          Boolean  @default(false)
   validationRetries Int      @default(0)
+  
+  // 10-Criteria Personal Evaluation System
+  evalProductivity   Int?
+  evalDifficulty     Int?
+  evalAccuracy       Int?
+  evalDepth          Int?
+  evalMastery        Int?
+  evalApplication    Int?
+  evalOutputQuality  Int?
+  evalProblemSolving Int?
+  evalIndependence   Int?
+  evalGoalRelevance  Int?
+  totalEvalMarks     Int?
+  evaluationMode     String?  // "manual" or "ai"
+
   createdAt         DateTime @default(now())
 
   user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)

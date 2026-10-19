@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { X, Sparkles, Clock, BookOpen, CheckCircle, AlertCircle, Globe, Lock } from 'lucide-react';
+import { X, Sparkles, Clock, BookOpen, CheckCircle, AlertCircle, Globe, Lock, Save } from 'lucide-react';
 import { ExamType, SubjectModule } from '../data/exams';
-import { StudySession } from '../services/storageService';
+import { StudySession, calculateSessionXP } from '../services/storageService';
 import { GeminiService } from '../services/geminiService';
+import { EvaluationSliders, EvaluationScores, DEFAULT_EVAL_SCORES } from './EvaluationSliders';
 import confetti from 'canvas-confetti';
 
 interface LogSessionModalProps {
@@ -22,10 +23,13 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
 }) => {
   const [selectedModuleId, setSelectedModuleId] = useState<string>(modules[0]?.id || '');
   const [topicName, setTopicName] = useState('');
-  const [durationMinutes, setDurationMinutes] = useState(30);
+  const [durationMinutes, setDurationMinutes] = useState(60);
   const [notes, setNotes] = useState('');
   const [mood, setMood] = useState<'focused' | 'neutral' | 'distracted'>('focused');
   const [isShared, setIsShared] = useState<boolean>(true);
+  const [evalScores, setEvalScores] = useState<EvaluationScores>({ ...DEFAULT_EVAL_SCORES });
+  const [evalMode, setEvalMode] = useState<'manual' | 'ai'>('manual');
+  const [aiFeedbackText, setAiFeedbackText] = useState<string>('');
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,24 +37,24 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
 
   const currentModule = modules.find(m => m.id === selectedModuleId) || modules[0];
 
-  const quickDurations = [15, 25, 45, 60, 90, 120];
+  // Durations up to 8 hours (480 minutes)
+  const quickDurations = [25, 45, 60, 90, 120, 180, 240, 360, 480];
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (notes.trim().length < 10) {
-      setError('Please provide at least 10 characters describing what you studied.');
+  const totalMarks = Object.values(evalScores).reduce((sum, val) => sum + (Number(val) || 0), 0);
+  const currentXP = calculateSessionXP(durationMinutes, totalMarks);
+
+  const handleScoreChange = (key: keyof EvaluationScores, val: number) => {
+    setEvalScores(prev => ({ ...prev, [key]: val }));
+  };
+
+  const handleRunAiEvaluation = async () => {
+    if (notes.trim().length < 5) {
+      setError('Please provide at least a few words in notes for AI to evaluate.');
       return;
     }
     setError(null);
     setIsEvaluating(true);
-
     try {
-      const now = new Date();
-      const endTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const startTimeObj = new Date(now.getTime() - durationMinutes * 60000);
-      const startTimeStr = startTimeObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      // Run AI evaluation
       const evalResult = await GeminiService.evaluateSession({
         exam,
         subject: currentModule?.category || 'General',
@@ -59,6 +63,31 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
         durationMinutes,
         notes: notes.trim(),
       });
+
+      if (evalResult.evalScores) {
+        setEvalScores(evalResult.evalScores);
+      }
+      setAiFeedbackText(evalResult.feedback);
+    } catch (err: any) {
+      setError(err?.message || 'AI evaluation temporarily unavailable. You can rate manually.');
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    try {
+      const now = new Date();
+      const endTimeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const startTimeObj = new Date(now.getTime() - durationMinutes * 60000);
+      const startTimeStr = startTimeObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      const finalFeedback = evalMode === 'ai' && aiFeedbackText
+        ? aiFeedbackText
+        : `[📊 Self-Evaluated: ${totalMarks}/100 Marks (${(durationMinutes / 60).toFixed(2)}h focused)]\nProductivity: ${evalScores.evalProductivity}/10, Difficulty: ${evalScores.evalDifficulty}/10, Accuracy: ${evalScores.evalAccuracy}/10, Depth: ${evalScores.evalDepth}/10, Mastery: ${evalScores.evalMastery}/10, Application: ${evalScores.evalApplication}/10, Output: ${evalScores.evalOutputQuality}/10, Problem-Solving: ${evalScores.evalProblemSolving}/10, Independence: ${evalScores.evalIndependence}/10, Relevance: ${evalScores.evalGoalRelevance}/10.`;
 
       const newSession: StudySession = {
         id: `sess-${Date.now()}`,
@@ -69,16 +98,26 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
         startTime: startTimeStr,
         endTime: endTimeStr,
         durationMinutes,
-        xpEarned: evalResult.xp,
+        xpEarned: currentXP,
         mood,
-        notes: notes.trim(),
-        aiFeedback: evalResult.feedback,
+        notes: notes.trim() || 'Study session completed.',
+        aiFeedback: finalFeedback,
         date: now.toISOString().split('T')[0],
         category: currentModule?.category || 'General',
-        apiError: evalResult.apiError,
-        usedFallback: evalResult.usedFallback,
-        modelUsed: evalResult.modelUsed,
-        isShared
+        isShared,
+        // 10-Criteria Evaluation Fields
+        evalProductivity: evalScores.evalProductivity,
+        evalDifficulty: evalScores.evalDifficulty,
+        evalAccuracy: evalScores.evalAccuracy,
+        evalDepth: evalScores.evalDepth,
+        evalMastery: evalScores.evalMastery,
+        evalApplication: evalScores.evalApplication,
+        evalOutputQuality: evalScores.evalOutputQuality,
+        evalProblemSolving: evalScores.evalProblemSolving,
+        evalIndependence: evalScores.evalIndependence,
+        evalGoalRelevance: evalScores.evalGoalRelevance,
+        totalEvalMarks: totalMarks,
+        evaluationMode: evalMode
       };
 
       onSessionCompleted(newSession);
@@ -90,12 +129,12 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
       // Reset form and close
       setNotes('');
       setTopicName('');
-      setDurationMinutes(30);
+      setDurationMinutes(60);
+      setEvalScores({ ...DEFAULT_EVAL_SCORES });
+      setAiFeedbackText('');
       onClose();
     } catch (err: any) {
-      setError(err?.message || 'Error evaluating session. Saved offline.');
-    } finally {
-      setIsEvaluating(false);
+      setError(err?.message || 'Error saving session.');
     }
   };
 
@@ -171,14 +210,14 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
             />
           </div>
 
-          {/* Duration Chips & Input */}
+          {/* Duration Chips & Input (Up to 8 hours / 480 minutes) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Duration (Minutes)
               </label>
               <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400">
-                {durationMinutes} min ({Math.floor(durationMinutes / 60)}h {durationMinutes % 60}m)
+                {durationMinutes} min ({(durationMinutes / 60).toFixed(2)}h / {Math.floor(durationMinutes / 60)}h {durationMinutes % 60}m)
               </span>
             </div>
             <div className="flex flex-wrap gap-1.5 mb-2">
@@ -187,20 +226,20 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
                   key={mins}
                   type="button"
                   onClick={() => setDurationMinutes(mins)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-all ${
                     durationMinutes === mins
                       ? 'bg-indigo-600 text-white shadow-xs'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
                 >
-                  {mins}m
+                  {mins >= 60 ? `${(mins / 60).toFixed(mins % 60 !== 0 ? 1 : 0)}h` : `${mins}m`}
                 </button>
               ))}
             </div>
             <input
               type="range"
               min="5"
-              max="240"
+              max="480"
               step="5"
               value={durationMinutes}
               onChange={(e) => setDurationMinutes(Number(e.target.value))}
@@ -219,10 +258,9 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
               placeholder="e.g., Read 35 pages of Laxmikanth, solved 20 MCQ questions on Parliament, revised Article 19 exceptions..."
               rows={3}
               className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-              required
             />
             <span className="text-[10px] text-slate-400">
-              Minimum 10 characters for AI assessment.
+              Optional for manual self-rating; recommended for AI analysis.
             </span>
           </div>
 
@@ -273,6 +311,19 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
             </div>
           </div>
 
+          {/* 10-Criteria Evaluation Sliders Component */}
+          <EvaluationSliders
+            scores={evalScores}
+            onChange={handleScoreChange}
+            onSetAll={setEvalScores}
+            durationMinutes={durationMinutes}
+            mode={evalMode}
+            onModeToggle={setEvalMode}
+            isEvaluatingAi={isEvaluating}
+            onTriggerAi={handleRunAiEvaluation}
+            canTriggerAi={notes.trim().length >= 5}
+          />
+
           {/* Privacy & Sharing Selector */}
           <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -317,18 +368,18 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isEvaluating || notes.trim().length < 10}
+              disabled={isEvaluating}
               className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-500/20 flex items-center gap-2 transition-all active:scale-95"
             >
               {isEvaluating ? (
                 <>
                   <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Evaluating with AI...</span>
+                  <span>Evaluating...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>✨ Evaluate & Save Session</span>
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Session (+{currentXP} XP)</span>
                 </>
               )}
             </button>

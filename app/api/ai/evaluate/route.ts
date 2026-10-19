@@ -45,18 +45,26 @@ export async function POST(request: Request) {
     const model = freeKeyRecord.model || 'openai/gpt-oss-120b';
     const label = freeKeyRecord.label || '⚡ Groq GPT OSS 120B (Ultra-Fast Free Engine)';
 
-    const prompt = `You are the StudyForge AI Academic Evaluator for competitive exams (${exam || 'UPSC'}).
-Evaluate this student study session based strictly on the CONTENT, depth, difficulty, and conceptual coverage described:
+    const prompt = `You are the StudyForge Academic Evaluator for competitive exams (${exam || 'UPSC'}).
+Evaluate this student study session across 10 evaluation criteria based strictly on the CONTENT, depth, accuracy, and conceptual coverage described:
 - Subject / Module: ${moduleName || 'General Studies'}
 - Specific Topic: ${topicName || 'General Practice'}
+- Focused Duration: ${durationMinutes || 60} minutes (${((durationMinutes || 60) / 60).toFixed(2)} hours)
 - Student Notes / What was studied: "${notes.trim()}"
 
-Provide a JSON response with:
+Provide a JSON response rating each criterion from 1 to 10 (1-2 poor/routine, 3-4 below average, 5-6 satisfactory/moderate, 7-8 strong, 9-10 exceptional):
 {
-  "depthScore": (number from 1 to 10 evaluating how deeply concepts were explored),
-  "difficultyScore": (number from 1 to 10 evaluating intellectual rigor and topic complexity),
-  "feedback": (concise 1-2 sentence high-yield motivational academic feedback acknowledging specific concepts studied),
-  "xp": (number from 40 to 100 XP based strictly on content depth and authenticity: basic/short notes = 40-55 XP, solid standard study = 60-75 XP, thorough/rigorous problem-solving or detailed notes = 80-100 XP)
+  "evalProductivity": (number 1-10: work volume produced relative to personal baseline),
+  "evalDifficulty": (number 1-10: intellectual complexity and challenge of material),
+  "evalAccuracy": (number 1-10: correctness of facts, calculations, and answers),
+  "evalDepth": (number 1-10: thoroughness of conceptual exploration and exceptions),
+  "evalMastery": (number 1-10: demonstrated retention and ability to explain without notes),
+  "evalApplication": (number 1-10: ability to solve unfamiliar problems or PYQs),
+  "evalOutputQuality": (number 1-10: clarity, structure, and revision utility of notes),
+  "evalProblemSolving": (number 1-10: reasoned problem-solving rather than rote memorization),
+  "evalIndependence": (number 1-10: self-reliance vs dependence on prompts/solutions),
+  "evalGoalRelevance": (number 1-10: direct alignment with exam syllabus and score impact),
+  "feedback": (concise 1-2 sentence high-yield motivational academic feedback acknowledging specific concepts studied)
 }
 Return ONLY valid JSON.`;
 
@@ -113,7 +121,19 @@ Return ONLY valid JSON.`;
       const jsonMatch = contentStr.match(/\{[\s\S]*\}/);
       parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(contentStr);
     } catch {
-      parsed = { feedback: contentStr, xp: 60, depthScore: 8, difficultyScore: 7 };
+      parsed = {
+        evalProductivity: 6,
+        evalDifficulty: 7,
+        evalAccuracy: 7,
+        evalDepth: 7,
+        evalMastery: 7,
+        evalApplication: 6,
+        evalOutputQuality: 7,
+        evalProblemSolving: 6,
+        evalIndependence: 7,
+        evalGoalRelevance: 8,
+        feedback: contentStr
+      };
     }
 
     // Update lastUsed
@@ -122,16 +142,41 @@ Return ONLY valid JSON.`;
       data: { lastUsed: new Date(), totalCalls: { increment: 1 } }
     }).catch(() => {});
 
+    const clamp = (val: any, fallback: number) => {
+      const n = Number(val);
+      return (!isNaN(n) && n >= 1 && n <= 10) ? Math.round(n) : fallback;
+    };
+
+    const scores = {
+      evalProductivity: clamp(parsed.evalProductivity, 6),
+      evalDifficulty: clamp(parsed.evalDifficulty, 7),
+      evalAccuracy: clamp(parsed.evalAccuracy, 7),
+      evalDepth: clamp(parsed.evalDepth, 7),
+      evalMastery: clamp(parsed.evalMastery, 7),
+      evalApplication: clamp(parsed.evalApplication, 6),
+      evalOutputQuality: clamp(parsed.evalOutputQuality, 7),
+      evalProblemSolving: clamp(parsed.evalProblemSolving, 6),
+      evalIndependence: clamp(parsed.evalIndependence, 7),
+      evalGoalRelevance: clamp(parsed.evalGoalRelevance, 8),
+    };
+
+    const totalMarks = Object.values(scores).reduce((sum, v) => sum + v, 0);
+    const focusedHours = Math.max(0.01, (Number(durationMinutes) || 60) / 60);
+    const calculatedXP = Math.max(1, Math.round(focusedHours * totalMarks));
+
     return NextResponse.json({
       success: true,
       evaluation: {
-        xp: Math.max(35, Math.min(100, Number(parsed.xp) || 60)),
-        depthScore: Number(parsed.depthScore) || 8,
-        difficultyScore: Number(parsed.difficultyScore) || 7,
+        xp: calculatedXP,
+        totalEvalMarks: totalMarks,
+        evalScores: scores,
+        depthScore: scores.evalDepth,
+        difficultyScore: scores.evalDifficulty,
         feedback: `[${label}]\n${parsed.feedback || 'Great session! High retention achieved.'}`,
         keyUsed: `${label} (Server Proxy)`,
         modelUsed: model,
-        usedFallback: false
+        usedFallback: false,
+        evaluationMode: 'ai'
       }
     }, { headers: CORS_HEADERS });
 

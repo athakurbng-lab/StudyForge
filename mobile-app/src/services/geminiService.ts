@@ -2,15 +2,31 @@ import { StorageService } from './storageService';
 
 let keyIndex = 0;
 
+export interface EvaluationCriterionScores {
+  evalProductivity: number;
+  evalDifficulty: number;
+  evalAccuracy: number;
+  evalDepth: number;
+  evalMastery: number;
+  evalApplication: number;
+  evalOutputQuality: number;
+  evalProblemSolving: number;
+  evalIndependence: number;
+  evalGoalRelevance: number;
+}
+
 export interface SessionEvaluationResult {
   xp: number;
-  depthScore: number;      // 1-10
-  difficultyScore: number; // 1-10
+  totalEvalMarks: number;
+  evalScores: EvaluationCriterionScores;
+  depthScore: number;      // 1-10 (kept for backwards compatibility)
+  difficultyScore: number; // 1-10 (kept for backwards compatibility)
   feedback: string;
   keyUsed: string;
   modelUsed: string;
   apiError?: string;
   usedFallback: boolean;
+  evaluationMode?: 'manual' | 'ai';
 }
 
 // Built-in shared OpenRouter Nemotron 3 Ultra 550B configuration (keys dynamically loaded from DB)
@@ -229,18 +245,34 @@ export const GeminiService = {
     const hardTimeoutPromise = new Promise<SessionEvaluationResult>((resolve) => {
       setTimeout(() => {
         const noteLen = (params.notes || '').trim().length;
-        let contentXp = 50;
-        if (noteLen > 150) contentXp = 85;
-        else if (noteLen > 60) contentXp = 75;
-        else if (noteLen > 20) contentXp = 60;
+        const defaultScore = noteLen > 100 ? 8 : (noteLen > 30 ? 6 : 5);
+        const fallbackScores: EvaluationCriterionScores = {
+          evalProductivity: defaultScore,
+          evalDifficulty: 7,
+          evalAccuracy: defaultScore,
+          evalDepth: noteLen > 30 ? 7 : 5,
+          evalMastery: defaultScore,
+          evalApplication: 6,
+          evalOutputQuality: noteLen > 50 ? 7 : 5,
+          evalProblemSolving: 6,
+          evalIndependence: 7,
+          evalGoalRelevance: 8
+        };
+        const totalMarks = Object.values(fallbackScores).reduce((sum, v) => sum + v, 0);
+        const focusedHours = Math.max(0.01, (params.durationMinutes || 60) / 60);
+        const contentXp = Math.max(1, Math.round(focusedHours * totalMarks));
+
         resolve({
           xp: contentXp,
-          depthScore: noteLen > 30 ? 8 : 7,
-          difficultyScore: 7,
+          totalEvalMarks: totalMarks,
+          evalScores: fallbackScores,
+          depthScore: fallbackScores.evalDepth,
+          difficultyScore: fallbackScores.evalDifficulty,
           feedback: `[⚡ StudyForge Fast Engine]\n\nSolid focus sprint on ${params.moduleName}. Consistent effort compounds into mastery!`,
           keyUsed: 'Fast Academic Engine',
           modelUsed: 'StudyForge Fast Engine',
-          usedFallback: true
+          usedFallback: true,
+          evaluationMode: 'ai'
         });
       }, 4200); // 4.2-second absolute hard ceiling: NEVER leaves button stuck
     });
@@ -259,20 +291,52 @@ export const GeminiService = {
     durationMinutes: number;
     notes: string;
   }): Promise<SessionEvaluationResult> {
-    const prompt = `You are the StudyForge AI Academic Evaluator for competitive exams (${params.exam}).
-Evaluate this student study session based strictly on the CONTENT, depth, difficulty, and conceptual coverage described:
+    const prompt = `You are the StudyForge Academic Evaluator for competitive exams (${params.exam}).
+Evaluate this student study session across 10 evaluation criteria based strictly on the CONTENT, depth, accuracy, and conceptual coverage described:
 - Subject / Module: ${params.moduleName}
 - Specific Topic: ${params.topicName || 'General Practice'}
+- Focused Duration: ${params.durationMinutes || 60} minutes (${((params.durationMinutes || 60) / 60).toFixed(2)} hours)
 - Student Notes / What was studied: "${params.notes || 'No detailed notes provided'}"
 
-Provide a JSON response with:
+Provide a JSON response rating each criterion from 1 to 10 (1-2 poor/routine, 3-4 below average, 5-6 satisfactory/moderate, 7-8 strong, 9-10 exceptional):
 {
-  "depthScore": (number from 1 to 10 evaluating how deeply concepts were explored),
-  "difficultyScore": (number from 1 to 10 evaluating intellectual rigor and topic complexity),
-  "feedback": (concise 1-2 sentence high-yield motivational academic feedback acknowledging specific concepts studied),
-  "xp": (number from 40 to 100 XP based strictly on content depth and authenticity: basic/short notes = 40-55 XP, solid standard study = 60-75 XP, thorough/rigorous problem-solving or detailed notes = 80-100 XP)
+  "evalProductivity": (number 1-10: work volume produced relative to personal baseline),
+  "evalDifficulty": (number 1-10: intellectual complexity and challenge of material),
+  "evalAccuracy": (number 1-10: correctness of facts, calculations, and answers),
+  "evalDepth": (number 1-10: thoroughness of conceptual exploration and exceptions),
+  "evalMastery": (number 1-10: demonstrated retention and ability to explain without notes),
+  "evalApplication": (number 1-10: ability to solve unfamiliar problems or PYQs),
+  "evalOutputQuality": (number 1-10: clarity, structure, and revision utility of notes),
+  "evalProblemSolving": (number 1-10: reasoned problem-solving rather than rote memorization),
+  "evalIndependence": (number 1-10: self-reliance vs dependence on prompts/solutions),
+  "evalGoalRelevance": (number 1-10: direct alignment with exam syllabus and score impact),
+  "feedback": (concise 1-2 sentence high-yield motivational academic feedback acknowledging specific concepts studied)
 }
 Return ONLY valid JSON.`;
+
+    const clamp = (val: any, fallback: number) => {
+      const n = Number(val);
+      return (!isNaN(n) && n >= 1 && n <= 10) ? Math.round(n) : fallback;
+    };
+
+    const extractScoresAndXP = (parsed: any) => {
+      const scores: EvaluationCriterionScores = {
+        evalProductivity: clamp(parsed?.evalProductivity, 6),
+        evalDifficulty: clamp(parsed?.evalDifficulty, 7),
+        evalAccuracy: clamp(parsed?.evalAccuracy, 7),
+        evalDepth: clamp(parsed?.evalDepth, 7),
+        evalMastery: clamp(parsed?.evalMastery, 7),
+        evalApplication: clamp(parsed?.evalApplication, 6),
+        evalOutputQuality: clamp(parsed?.evalOutputQuality, 7),
+        evalProblemSolving: clamp(parsed?.evalProblemSolving, 6),
+        evalIndependence: clamp(parsed?.evalIndependence, 7),
+        evalGoalRelevance: clamp(parsed?.evalGoalRelevance, 8),
+      };
+      const totalMarks = Object.values(scores).reduce((sum, v) => sum + v, 0);
+      const focusedHours = Math.max(0.01, (params.durationMinutes || 60) / 60);
+      const xp = Math.max(1, Math.round(focusedHours * totalMarks));
+      return { scores, totalMarks, xp };
+    };
 
     let primaryFailureReason = '';
 
@@ -301,7 +365,17 @@ Return ONLY valid JSON.`;
       if (serverRes.ok) {
         const serverData = await serverRes.json();
         if (serverData.success && serverData.evaluation) {
-          return serverData.evaluation;
+          const ev = serverData.evaluation;
+          const { scores, totalMarks, xp } = extractScoresAndXP(ev.evalScores || ev);
+          return {
+            ...ev,
+            evalScores: scores,
+            totalEvalMarks: totalMarks,
+            xp: xp || ev.xp,
+            depthScore: scores.evalDepth,
+            difficultyScore: scores.evalDifficulty,
+            evaluationMode: 'ai'
+          };
         }
       }
     } catch (err: any) {
@@ -360,16 +434,20 @@ Return ONLY valid JSON.`;
               const jsonMatch = contentStr.match(/\{[\s\S]*\}/);
               parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(contentStr);
             } catch {
-              parsed = { feedback: contentStr, xp: 60, depthScore: 8, difficultyScore: 7 };
+              parsed = { feedback: contentStr };
             }
+            const { scores, totalMarks, xp } = extractScoresAndXP(parsed);
             return {
-              xp: Math.max(35, Math.min(100, Number(parsed.xp) || 60)),
-              depthScore: Number(parsed.depthScore) || 8,
-              difficultyScore: Number(parsed.difficultyScore) || 7,
+              xp,
+              totalEvalMarks: totalMarks,
+              evalScores: scores,
+              depthScore: scores.evalDepth,
+              difficultyScore: scores.evalDifficulty,
               feedback: `[${targetLabel}]\n${parsed.feedback || 'Great session! High retention achieved.'}`,
               keyUsed: `${targetLabel} (Database)`,
               modelUsed: targetModel,
-              usedFallback: false
+              usedFallback: false,
+              evaluationMode: 'ai'
             };
           }
         } else {
@@ -425,14 +503,18 @@ Return ONLY valid JSON.`;
               const contentStr = data?.choices?.[0]?.message?.content;
               if (contentStr) {
                 const parsed = JSON.parse(contentStr);
+                const { scores, totalMarks, xp } = extractScoresAndXP(parsed);
                 return {
-                  xp: Math.max(35, Math.min(100, Number(parsed.xp) || 60)),
-                  depthScore: Number(parsed.depthScore) || 8,
-                  difficultyScore: Number(parsed.difficultyScore) || 7,
+                  xp,
+                  totalEvalMarks: totalMarks,
+                  evalScores: scores,
+                  depthScore: scores.evalDepth,
+                  difficultyScore: scores.evalDifficulty,
                   feedback: `[⚡ Custom OpenRouter (Nemotron)]\n${parsed.feedback || 'Great session! High retention achieved.'}`,
                   keyUsed: `Personal OpenRouter (${key.slice(0, 8)}...)`,
                   modelUsed: 'NVIDIA Nemotron 3 Ultra 550B (Custom Key)',
-                  usedFallback: false
+                  usedFallback: false,
+                  evaluationMode: 'ai'
                 };
               }
             } else {
@@ -463,14 +545,18 @@ Return ONLY valid JSON.`;
               const jsonText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
               if (jsonText) {
                 const parsed = JSON.parse(jsonText);
+                const { scores, totalMarks, xp } = extractScoresAndXP(parsed);
                 return {
-                  xp: Math.max(35, Math.min(100, Number(parsed.xp) || 60)),
-                  depthScore: Number(parsed.depthScore) || 8,
-                  difficultyScore: Number(parsed.difficultyScore) || 7,
+                  xp,
+                  totalEvalMarks: totalMarks,
+                  evalScores: scores,
+                  depthScore: scores.evalDepth,
+                  difficultyScore: scores.evalDifficulty,
                   feedback: `[✨ Google Gemini 2.5 Flash]\n${parsed.feedback || 'Great session! High retention achieved.'}`,
                   keyUsed: `Personal Gemini Key (${key.slice(0, 8)}...)`,
                   modelUsed: 'Google Gemini 2.5 Flash',
-                  usedFallback: false
+                  usedFallback: false,
+                  evaluationMode: 'ai'
                 };
               }
             } else {
@@ -495,22 +581,37 @@ Return ONLY valid JSON.`;
     console.warn(`[StudyForge AI] Live AI Keys Failed: "${finalFailureReason}". Switching to Offline Heuristic Logic.`);
 
     const noteLen = (params.notes || '').trim().length;
-    let contentXp = 50;
-    if (noteLen > 150) contentXp = 85;
-    else if (noteLen > 60) contentXp = 75;
-    else if (noteLen > 20) contentXp = 60;
+    const baseMark = noteLen > 150 ? 8 : (noteLen > 60 ? 7 : (noteLen > 20 ? 6 : 5));
+    const heuristicScores: EvaluationCriterionScores = {
+      evalProductivity: baseMark,
+      evalDifficulty: 7,
+      evalAccuracy: baseMark,
+      evalDepth: noteLen > 30 ? 7 : 5,
+      evalMastery: baseMark,
+      evalApplication: 6,
+      evalOutputQuality: noteLen > 50 ? 7 : 5,
+      evalProblemSolving: 6,
+      evalIndependence: 7,
+      evalGoalRelevance: 8
+    };
+    const totalMarks = Object.values(heuristicScores).reduce((sum, v) => sum + v, 0);
+    const focusedHours = Math.max(0.01, (params.durationMinutes || 60) / 60);
+    const contentXp = Math.max(1, Math.round(focusedHours * totalMarks));
 
     const feedback = `[⚙️ Offline Academic Engine: ${primaryFailureReason ? 'Live AI rate-limited/offline' : 'Connecting to local engine'}]\n\nSolid focus session on ${params.moduleName}. Consistent effort compounds into mastery!`;
 
     return {
       xp: contentXp,
-      depthScore: noteLen > 30 ? 8 : 7,
-      difficultyScore: 7,
+      totalEvalMarks: totalMarks,
+      evalScores: heuristicScores,
+      depthScore: heuristicScores.evalDepth,
+      difficultyScore: heuristicScores.evalDifficulty,
       feedback,
       keyUsed: 'Offline Heuristic Engine',
       modelUsed: 'Offline Academic Engine',
       apiError: finalFailureReason,
-      usedFallback: true
+      usedFallback: true,
+      evaluationMode: 'ai'
     };
   }
 };
