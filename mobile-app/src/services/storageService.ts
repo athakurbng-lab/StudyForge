@@ -36,6 +36,20 @@ export interface StudySession {
   evaluationMode?: 'manual' | 'ai'; // 'manual' (default) or 'ai'
 }
 
+export interface DeletedSessionRecord {
+  id: string;
+  cloudId?: string;
+  title?: string;
+  moduleName?: string;
+  durationMinutes?: number;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  notes?: string;
+  xpEarned?: number;
+  deletedAt: number;
+}
+
 /**
  * Calculates session XP based on exact focused time and evaluation marks.
  * Formula: Focused Hours × Total Evaluation Marks (Sum of 10 criteria, 10–100)
@@ -85,6 +99,7 @@ const STORAGE_KEYS = {
   TOTAL_XP: 'studyforge_total_xp',
   DAILY_XP_GOAL: 'studyforge_daily_xp_goal',
   FREE_KEY: 'studyforge_free_key',
+  DELETED_SESSIONS: 'studyforge_deleted_sessions',
 };
 
 // Zero pre-filled sessions: clean slate for the user
@@ -149,18 +164,24 @@ export const StorageService = {
     return result;
   },
 
-  // One-time startup sanitizer to clean mock data and deduplicate any local storage sessions
+  // One-time startup sanitizer to clean mock data, deduplicate, and enforce tombstones
   sanitizeStorage(): void {
-    const SANITIZER_KEY = 'studyforge_clean_v18';
+    const SANITIZER_KEY = 'studyforge_clean_v19';
     if (localStorage.getItem(SANITIZER_KEY) !== 'true') {
       const sessions = localStorage.getItem(STORAGE_KEYS.SESSIONS);
       if (sessions) {
         try {
           const list = JSON.parse(sessions);
           if (Array.isArray(list)) {
-            // Filter out mock sessions, normalize durations, and deduplicate
+            // Tombstone check: filter out any sessions already marked deleted
+            const deletedList = this.getDeletedSessions();
+            const deletedCloudIds = new Set(deletedList.map(d => d.cloudId).filter(Boolean));
+            const deletedLocalIds = new Set(deletedList.map(d => d.id));
+
+            // Filter out mock sessions, normalize durations, remove deleted sessions, and deduplicate
             const genuine = list
               .filter((s: any) => !/^sess-[1-9]$/.test(s.id))
+              .filter((s: any) => !(s.cloudId && deletedCloudIds.has(s.cloudId)) && !deletedLocalIds.has(s.id))
               .map((s: any) => ({
                 ...s,
                 durationMinutes: (typeof s.durationMinutes === 'number' && s.durationMinutes > 0 && s.durationMinutes <= 480)
@@ -379,7 +400,46 @@ export const StorageService = {
     return target;
   },
 
-  deleteSession(sessionId: string): { deleted: boolean; xpDeducted: number; cloudId?: string } {
+  // Tombstone tracking for deleted sessions (guarantees deleted sessions are purged from cloud and never resurrected)
+  getDeletedSessions(): DeletedSessionRecord[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.DELETED_SESSIONS);
+    if (!raw) return [];
+    try {
+      const list = JSON.parse(raw);
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  },
+
+  recordDeletedSession(record: DeletedSessionRecord): void {
+    const list = this.getDeletedSessions();
+    const exists = list.some(r => 
+      (r.cloudId && record.cloudId && r.cloudId === record.cloudId) ||
+      r.id === record.id ||
+      (
+        r.date === record.date && 
+        r.durationMinutes === record.durationMinutes && 
+        r.title === record.title &&
+        (r.notes && record.notes && r.notes.slice(0, 30) === record.notes.slice(0, 30))
+      )
+    );
+    if (!exists) {
+      list.push(record);
+      // Retain up to 200 recent tombstones
+      if (list.length > 200) list.shift();
+      localStorage.setItem(STORAGE_KEYS.DELETED_SESSIONS, JSON.stringify(list));
+    }
+  },
+
+  removeDeletedSession(idOrCloudId: string): void {
+    if (!idOrCloudId) return;
+    const list = this.getDeletedSessions();
+    const filtered = list.filter(r => r.id !== idOrCloudId && r.cloudId !== idOrCloudId);
+    localStorage.setItem(STORAGE_KEYS.DELETED_SESSIONS, JSON.stringify(filtered));
+  },
+
+  deleteSession(sessionId: string): { deleted: boolean; xpDeducted: number; cloudId?: string; session?: StudySession } {
     const list = this.getSessions();
     const target = list.find(s => s.id === sessionId || s.cloudId === sessionId);
     if (!target) return { deleted: false, xpDeducted: 0 };
@@ -393,7 +453,23 @@ export const StorageService = {
       this.setTotalXp(Math.max(0, currentXp - xpDeducted));
     }
     const resolvedCloudId = target.cloudId || (!target.id.startsWith('sess-') ? target.id : undefined);
-    return { deleted: true, xpDeducted, cloudId: resolvedCloudId };
+
+    // Save tombstone so cloud sync will delete it from PostgreSQL and never resurrect it
+    this.recordDeletedSession({
+      id: target.id,
+      cloudId: resolvedCloudId,
+      title: target.moduleName || target.topicName,
+      moduleName: target.moduleName,
+      durationMinutes: target.durationMinutes,
+      date: target.date,
+      startTime: target.startTime,
+      endTime: target.endTime,
+      notes: target.notes,
+      xpEarned: target.xpEarned,
+      deletedAt: Date.now(),
+    });
+
+    return { deleted: true, xpDeducted, cloudId: resolvedCloudId, session: target };
   },
 
   getDailyXpGoal(): number {
@@ -485,8 +561,8 @@ export const StorageService = {
       inactivityAlertTime: '20:30',
       streakSaverEnabled: true,
       spacedRevisionAlertEnabled: true,
-      appVersion: 'v1.0.17 (Production)',
-      buildNumber: '2026.10.20-v18',
+      appVersion: 'v1.0.18 (Production)',
+      buildNumber: '2026.10.20-v19',
     };
     if (!saved) return defaults;
     try {

@@ -190,14 +190,14 @@ export const App: React.FC = () => {
   };
 
   // Delete session handler (long-press in SessionTimeline)
-  const handleDeleteSession = async (sessionId: string) => {
+  const handleDeleteSession = async (sessionId: string, sessionObj?: StudySession) => {
     const res = StorageService.deleteSession(sessionId);
     if (res.deleted) {
       setSessions(StorageService.getSessions());
       setTotalXp(StorageService.getTotalXp());
       const cloudIdToDelete = res.cloudId || sessionId;
       if (cloudIdToDelete) {
-        await ApiService.deleteCloudSession(cloudIdToDelete);
+        await ApiService.deleteCloudSession(cloudIdToDelete, res.session || sessionObj);
       }
     }
   };

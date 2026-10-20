@@ -1,4 +1,4 @@
-import { StorageService, StudySession } from './storageService';
+import { StorageService, StudySession, DeletedSessionRecord } from './storageService';
 
 const API_BASE = 'https://study-forge-five-pi.vercel.app';
 
@@ -108,15 +108,49 @@ export const ApiService = {
     });
   },
 
-  // Non-destructive reconciliation between local on-device sessions and cloud records with strict deduplication
+  // Non-destructive reconciliation between local on-device sessions and cloud records with strict deduplication and tombstone enforcement
   reconcileSessions(localSessions: StudySession[], cloudRaw: any[]): StudySession[] {
     const mappedCloud = this.mapCloudSessions(cloudRaw);
-    if (!localSessions || localSessions.length === 0) {
-      return StorageService.deduplicateSessions(mappedCloud);
+
+    // Fetch tombstones to ensure deleted sessions are purged and never resurrected
+    const deletedList = StorageService.getDeletedSessions();
+    const deletedCloudIds = new Set(deletedList.map(d => d.cloudId).filter(Boolean) as string[]);
+    const deletedLocalIds = new Set(deletedList.map(d => d.id).filter(Boolean));
+    const deletedFuzzyKeys = new Set(
+      deletedList
+        .map(d => `${d.date || ''}_${d.durationMinutes || 60}_${(d.title || d.moduleName || '').trim().toLowerCase()}_${(d.notes || '').trim().slice(0, 30).toLowerCase()}`)
+        .filter(k => k.length > 10)
+    );
+
+    // Filter out any cloud session that has been deleted on this device
+    const activeCloud = mappedCloud.filter(cs => {
+      if (deletedCloudIds.has(cs.id)) {
+        this.deleteCloudSession(cs.id, { cloudId: cs.id, moduleName: cs.moduleName, durationMinutes: cs.durationMinutes });
+        return false;
+      }
+      const csFuzzy = `${cs.date || ''}_${cs.durationMinutes || 60}_${(cs.moduleName || cs.topicName || '').trim().toLowerCase()}_${(cs.notes || '').trim().slice(0, 30).toLowerCase()}`;
+      if (csFuzzy.length > 10 && deletedFuzzyKeys.has(csFuzzy)) {
+        this.deleteCloudSession(cs.id, { cloudId: cs.id, moduleName: cs.moduleName, durationMinutes: cs.durationMinutes });
+        return false;
+      }
+      return true;
+    });
+
+    // Also filter active local sessions to ensure no resurrecting of deleted local sessions
+    const activeLocal = (localSessions || []).filter(ls => {
+      if (ls.cloudId && deletedCloudIds.has(ls.cloudId)) return false;
+      if (deletedLocalIds.has(ls.id)) return false;
+      const lsFuzzy = `${ls.date || ''}_${ls.durationMinutes || 60}_${(ls.moduleName || ls.topicName || '').trim().toLowerCase()}_${(ls.notes || '').trim().slice(0, 30).toLowerCase()}`;
+      if (lsFuzzy.length > 10 && deletedFuzzyKeys.has(lsFuzzy)) return false;
+      return true;
+    });
+
+    if (activeLocal.length === 0) {
+      return StorageService.deduplicateSessions(activeCloud);
     }
 
     // 1. Deduplicate cloud list first to avoid processing duplicate server entries
-    const cleanCloud = StorageService.deduplicateSessions(mappedCloud);
+    const cleanCloud = StorageService.deduplicateSessions(activeCloud);
 
     // Track which local sessions were matched to a cloud session (1-to-1 match only)
     const matchedLocalIds = new Set<string>();
@@ -124,7 +158,7 @@ export const ApiService = {
 
     for (const cs of cleanCloud) {
       // Find matching local session that has NOT been claimed yet
-      const localMatch = localSessions.find(ls => 
+      const localMatch = activeLocal.find(ls => 
         !matchedLocalIds.has(ls.id) && (
           (ls.cloudId && ls.cloudId === cs.id) ||
           ls.id === cs.id ||
@@ -184,19 +218,25 @@ export const ApiService = {
     }
 
     // Add any truly unsynced or local-only sessions that don't exist on the cloud yet
-    const localOnly = localSessions.filter(ls => !matchedLocalIds.has(ls.id) && !ls.cloudId);
+    const localOnly = activeLocal.filter(ls => !matchedLocalIds.has(ls.id) && !ls.cloudId);
 
     // Combine, deduplicate, and sort by date descending
     const combined = [...localOnly, ...mergedCloud];
     const deduplicated = StorageService.deduplicateSessions(combined);
 
-    deduplicated.sort((a, b) => {
+    // Final tombstone safety check
+    const finalClean = deduplicated.filter(s => 
+      !(s.cloudId && deletedCloudIds.has(s.cloudId)) &&
+      !deletedLocalIds.has(s.id)
+    );
+
+    finalClean.sort((a, b) => {
       const dateCmp = (b.date || '').localeCompare(a.date || '');
       if (dateCmp !== 0) return dateCmp;
       return (b.startTime || '').localeCompare(a.startTime || '');
     });
 
-    return deduplicated;
+    return finalClean;
   },
 
   async login(username: string, password: string): Promise<{ success: boolean; user?: AuthUser; error?: string }> {
@@ -302,18 +342,32 @@ export const ApiService = {
     }
     isSyncInProgress = true;
 
-    const user = StorageService.getAuthUser();
-    const token = StorageService.getAuthToken();
-    const effectiveUserId = user?.id || 'cmv0ejzwk00002ebpsqohbcn1';
-
     try {
-      // 1. Upload any offline or local sessions that haven't reached the cloud yet
+      // Step 1: Process any pending offline deletions first!
+      const pendingDeletions = StorageService.getDeletedSessions();
+      if (pendingDeletions.length > 0) {
+        console.log(`[Sync] Processing ${pendingDeletions.length} pending session deletion(s)...`);
+        for (const del of pendingDeletions) {
+          const targetId = del.cloudId || del.id;
+          await this.deleteCloudSession(targetId, del);
+        }
+      }
+
+      // Step 2: Upload any offline or local sessions that haven't reached the cloud yet
       await this.uploadUnsyncedSessions();
 
-      const headers: Record<string, string> = {};
+      const user = StorageService.getAuthUser();
+      const token = StorageService.getAuthToken();
+      const effectiveUserId = user?.id || 'cmv0ejzwk00002ebpsqohbcn1';
+      const effectiveUsername = user?.username || 'Abhishek Thakur';
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-User-Id': effectiveUserId,
+      };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${API_BASE}/api/sessions?userId=${effectiveUserId}`, { headers });
+      const res = await fetch(`${API_BASE}/api/sessions?userId=${encodeURIComponent(effectiveUserId)}&username=${encodeURIComponent(effectiveUsername)}&isClientSync=true&t=${Date.now()}`, { headers });
       if (!res.ok) return false;
 
       const data = await res.json();
@@ -339,20 +393,73 @@ export const ApiService = {
     return false;
   },
 
-  // Delete a cloud session from the site database
-  async deleteCloudSession(sessionId: string): Promise<boolean> {
-    const token = StorageService.getAuthToken();
-    if (!token) return false;
+  // Delete a cloud session from the site database with full offline & metadata fallback
+  async deleteCloudSession(sessionId: string, sessionMeta?: Partial<DeletedSessionRecord>): Promise<boolean> {
     try {
-      const res = await fetch(`${API_BASE}/api/sessions/${sessionId}`, {
+      const authUser = StorageService.getAuthUser();
+      const token = StorageService.getAuthToken();
+      const effectiveUserId = authUser?.id || 'cmv0ejzwk00002ebpsqohbcn1';
+      const effectiveUsername = authUser?.username || 'Abhishek Thakur';
+
+      const url = new URL(`${API_BASE}/api/sessions/${encodeURIComponent(sessionId)}`);
+      url.searchParams.set('userId', effectiveUserId);
+      url.searchParams.set('username', effectiveUsername);
+      url.searchParams.set('isClientSync', 'true');
+
+      const title = sessionMeta?.title || sessionMeta?.moduleName;
+      if (title) url.searchParams.set('title', title);
+      if (sessionMeta?.durationMinutes) url.searchParams.set('duration', String(sessionMeta.durationMinutes));
+      if (sessionMeta?.notes) url.searchParams.set('notes', sessionMeta.notes.slice(0, 50));
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-User-Id': effectiveUserId,
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const bodyPayload = {
+        userId: effectiveUserId,
+        username: effectiveUsername,
+        isClientSync: true,
+        title,
+        duration: sessionMeta?.durationMinutes,
+        notes: sessionMeta?.notes,
+        cloudId: sessionMeta?.cloudId,
+        localId: sessionMeta?.id || sessionId,
+      };
+
+      const res = await fetch(url.toString(), {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers,
+        body: JSON.stringify(bodyPayload),
       });
-      return res.ok;
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok || (data && data.success)) {
+        // Successfully deleted on server or already deleted!
+        StorageService.removeDeletedSession(sessionId);
+        if (sessionMeta?.cloudId) StorageService.removeDeletedSession(sessionMeta.cloudId);
+        if (sessionMeta?.id) StorageService.removeDeletedSession(sessionMeta.id);
+
+        if (data?.user?.totalXP !== undefined && typeof data.user.totalXP === 'number') {
+          StorageService.setTotalXp(data.user.totalXP);
+        }
+        if (data?.user?.streak !== undefined && typeof data.user.streak === 'number') {
+          StorageService.setStreak(data.user.streak);
+        }
+        if (data?.user?.freezeTokens !== undefined && typeof data.user.freezeTokens === 'number') {
+          StorageService.setFreezeTokens(data.user.freezeTokens);
+        }
+        return true;
+      } else {
+        console.warn('[Delete Cloud Session] Server responded with error status:', res.status, data);
+        return false;
+      }
     } catch (err) {
-      console.warn('Delete cloud session failed:', err);
+      console.warn('[Delete Cloud Session] Network failed to delete cloud session:', err);
       return false;
     }
   },
@@ -472,7 +579,15 @@ export const ApiService = {
 
   // Upload any offline/local sessions that have not yet synced to the cloud database
   async uploadUnsyncedSessions(): Promise<number> {
-    const unsynced = StorageService.getSessions().filter(s => !s.cloudId && !inFlightUploads.has(s.id));
+    const deletedList = StorageService.getDeletedSessions();
+    const deletedIds = new Set(deletedList.map(d => d.id));
+    const deletedCloudIds = new Set(deletedList.map(d => d.cloudId).filter(Boolean));
+    const unsynced = StorageService.getSessions().filter(s => 
+      !s.cloudId && 
+      !inFlightUploads.has(s.id) && 
+      !deletedIds.has(s.id) &&
+      !(s.cloudId && deletedCloudIds.has(s.cloudId))
+    );
     let count = 0;
     for (const s of unsynced) {
       const cloudId = await this.syncSessionToCloud(s);

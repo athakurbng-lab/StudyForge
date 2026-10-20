@@ -10,7 +10,7 @@ interface SessionTimelineProps {
   activeFilterDescription?: string;
   onResetFilters?: () => void;
   onOpenLogSession?: () => void;
-  onDeleteSession?: (sessionId: string) => void;
+  onDeleteSession?: (sessionId: string, session?: StudySession) => void;
   onToggleShareSession?: (session: StudySession) => void;
 }
 
@@ -419,9 +419,11 @@ export const SessionTimeline: React.FC<SessionTimelineProps> = ({
               </button>
               <button
                 onClick={() => {
-                  const id = sessionToDelete.id;
+                  const target = sessionToDelete;
                   setSessionToDelete(null);
-                  onDeleteSession?.(id);
+                  if (target) {
+                    onDeleteSession?.(target.id, target);
+                  }
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-xs active:scale-95"
               >
