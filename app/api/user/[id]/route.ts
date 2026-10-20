@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, X-User-Id, x-user-id, *',
 };
 
 export async function OPTIONS() {

@@ -361,10 +361,7 @@ export const ApiService = {
       const effectiveUserId = user?.id || 'cmv0ejzwk00002ebpsqohbcn1';
       const effectiveUsername = user?.username || 'Abhishek Thakur';
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'X-User-Id': effectiveUserId,
-      };
+      const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await fetch(`${API_BASE}/api/sessions?userId=${encodeURIComponent(effectiveUserId)}&username=${encodeURIComponent(effectiveUsername)}&isClientSync=true&t=${Date.now()}`, { headers });
@@ -411,29 +408,14 @@ export const ApiService = {
       if (sessionMeta?.durationMinutes) url.searchParams.set('duration', String(sessionMeta.durationMinutes));
       if (sessionMeta?.notes) url.searchParams.set('notes', sessionMeta.notes.slice(0, 50));
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'X-User-Id': effectiveUserId,
-      };
+      const headers: Record<string, string> = {};
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const bodyPayload = {
-        userId: effectiveUserId,
-        username: effectiveUsername,
-        isClientSync: true,
-        title,
-        duration: sessionMeta?.durationMinutes,
-        notes: sessionMeta?.notes,
-        cloudId: sessionMeta?.cloudId,
-        localId: sessionMeta?.id || sessionId,
-      };
-
       const res = await fetch(url.toString(), {
         method: 'DELETE',
         headers,
-        body: JSON.stringify(bodyPayload),
       });
 
       const data = await res.json().catch(() => null);

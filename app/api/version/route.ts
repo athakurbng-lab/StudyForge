@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control, X-Requested-With, X-User-Id, *',
 };
 
 export async function OPTIONS() {
@@ -17,20 +17,20 @@ export async function OPTIONS() {
 
 export async function GET() {
   const versionData = {
-    version: "1.0.18",
-    versionCode: 19,
+    version: "1.0.19",
+    versionCode: 20,
     releaseDate: "2026-10-20",
     minSupportedVersion: "1.0.0",
     changelog: [
-      "🗑️ Persistent Tombstone Tracking: Deleted study sessions are now tracked locally and permanently purged from the cloud database",
-      "🛡️ Anti-Resurrection Cloud Sync: Prevents deleted sessions from reappearing during cloud sync and background polling",
-      "⚡ Robust Deletion Authentication: Allows session deletion across guest, offline, and authenticated modes with user and metadata fallback",
-      "🔄 Instant XP Synchronization: Deducts session XP locally and on the server with floor protection"
+      "🚀 Simple CORS Sync: Removed custom headers on sync and delete requests to prevent mobile preflight failures",
+      "🛡️ Preflight Header Whitelist: Allowed X-User-Id, x-user-id, and wildcard headers across all server API routes",
+      "🗑️ Clean DELETE Requests: Passed all session deletion parameters in query URL to prevent mobile proxy body dropping",
+      "🔄 Instant Cloud Database Sync: Guaranteed synchronization between local storage, tombstone queue, and PostgreSQL"
     ],
-    downloadUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.18.apk",
-    githubUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.18.apk",
+    downloadUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.19.apk",
+    githubUrl: "https://github.com/athakurbng-lab/StudyForge/raw/main/StudyForge-OS-v1.0.19.apk",
     fileSizeMb: 4.1,
-    sha256: "c57709d4809d5ed5e3ebd2bd39f22a3d234c59670510a748838a76eb19effd6d"
+    sha256: "82bc2aacfea74c931af8b809442573b8978fb9cac16ab526394a5f7400321a14"
   };
 
   return NextResponse.json(versionData, {
